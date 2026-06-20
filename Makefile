@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate clean
 
 install:           ## Install core package
 	pip install -e .
@@ -29,6 +29,12 @@ data:              ## Generate the quick-demo synthetic dataset
 
 baselines:         ## Train + evaluate the v0.2 baselines (quick-demo) and write the report
 	python -m scripts.train_baseline --mode quick_demo --epochs 10
+
+transformer:       ## Train SensorPatchTST alongside the baselines (quick-demo)
+	python -m scripts.train_baseline --models logreg,xgboost,cnn,lstm,transformer --mode quick_demo --epochs 15
+
+ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
+	python -m scripts.ablate_transformer --mode quick_demo --epochs 15
 
 clean:
 	rm -rf .pytest_cache .ruff_cache **/__pycache__ build dist *.egg-info

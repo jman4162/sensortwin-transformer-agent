@@ -1,0 +1,25 @@
+# SensorPatchTST patch-transformer (spec §9.2 / §10). Main model for v0.3.
+model:
+  d_model: 128
+  num_layers: 4
+  num_heads: 4
+  mlp_ratio: 4
+  dropout: 0.1
+  patch_len: 16
+  stride: 8
+  channel_embedding: true
+  pooling: attention   # attention | mean
+train:
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  scheduler: cosine_warmup
+  warmup_epochs: 5
+  batch_size: 64
+  epochs: 30
+  patience: 8
+  augment:
+    jitter: 0.03
+    scaling: [0.8, 1.2]
+    channel_dropout: 0.1

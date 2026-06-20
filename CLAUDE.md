@@ -110,6 +110,10 @@ either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding co
 - **v0.2** — `features/` (spectral, correlations, `build_feature_matrix`), `models/` (baselines.py:
   LogReg/RF/XGBoost + IsolationForest; cnn.py; lstm.py), `training/loop.py`, `evaluation/`
   (metrics, calibration, robustness, plots), `scripts/train_baseline.py`.
+- **v0.3** — `models/transformer.py` (`SensorPatchTST`), `training/augment.py` + opt-in `train_model`
+  args (AdamW/weight-decay/label-smoothing/cosine-warmup/augment; defaults keep baselines unchanged),
+  `configs/models/sensorpatchtst.yaml`, `scripts/ablate_transformer.py`. The transformer plugs into
+  `train_baseline`'s `_run_deep` (run with `--models transformer`).
 
 CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
 (installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules

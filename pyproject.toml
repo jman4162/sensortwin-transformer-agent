@@ -58,6 +58,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # E402: sets OpenMP env vars before importing torch/xgboost (must precede imports).
 # E501: assembles markdown report tables whose rows are intentionally long.
 "scripts/train_baseline.py" = ["E402", "E501"]
+"scripts/ablate_transformer.py" = ["E402", "E501"]
 
 [tool.black]
 line-length = 100

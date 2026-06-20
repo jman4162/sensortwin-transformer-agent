@@ -1,4 +1,4 @@
-# Baseline results (v0.2)
+# Model results
 
 Synthetic dataset: 2000 samples, T=512, seed=0, leakage-safe random split (70/15/15), metrics on the held-out test split.
 
@@ -7,10 +7,9 @@ Synthetic dataset: 2000 samples, T=512, seed=0, leakage-safe random split (70/15
 | Model | Macro-F1 | Weighted-F1 | Accuracy | Macro-AUROC | ECE | Brier | Missing-ch Δ | Params | Train (s) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | logreg | 0.571 | 0.593 | 0.587 | 0.898 | 0.122 | 0.551 | 0.554 | — | 0.0 |
-| random_forest | 0.543 | 0.579 | 0.607 | 0.915 | 0.181 | 0.548 | 0.234 | — | 1.7 |
-| xgboost | 0.620 | 0.652 | 0.660 | 0.920 | 0.114 | 0.470 | 0.302 | — | 5.1 |
-| cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 0.593 | 0.479 | 54k | 35.7 |
-| lstm | 0.338 | 0.360 | 0.393 | 0.817 | 0.063 | 0.704 | 0.320 | 39k | 25.4 |
+| xgboost | 0.620 | 0.652 | 0.660 | 0.920 | 0.114 | 0.470 | 0.302 | — | 5.0 |
+| cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 0.593 | 0.479 | 54k | 35.0 |
+| transformer | 0.435 | 0.463 | 0.500 | 0.859 | 0.143 | 0.659 | 0.274 | 814k | 459.1 |
 
 Macro-F1 is the headline metric (event classes are imbalanced). Missing-ch Δ is the worst single-channel-dropout macro-F1 drop vs clean (higher = more fragile).
 

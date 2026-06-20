@@ -35,7 +35,7 @@ class SensorArrayDataset:
             import torch
             from torch.utils.data import Dataset
         except ImportError as e:  # pragma: no cover
-            raise ImportError("PyTorch required: install with `pip install -e \".[ml]\"`") from e
+            raise ImportError('PyTorch required: install with `pip install -e ".[ml]"`') from e
 
         outer = self
 

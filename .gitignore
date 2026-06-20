@@ -36,6 +36,8 @@ reports/figures/*
 reports/experiment_summaries/figures/
 reports/experiment_summaries/metrics_*.json
 reports/experiment_summaries/metrics_*.csv
+# Ablation table needs colab_standard + seed averaging to be meaningful; generate with `make ablate`.
+reports/experiment_summaries/transformer_ablations.md
 
 # OS / editor
 .DS_Store

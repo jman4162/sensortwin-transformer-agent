@@ -46,9 +46,7 @@ def random_split(
     return splits
 
 
-def severity_split(
-    meta_events: list[dict[str, Any]], threshold: float, seed: int
-) -> SplitIndices:
+def severity_split(meta_events: list[dict[str, Any]], threshold: float, seed: int) -> SplitIndices:
     """Train on mild events, test on severe ones (severity >= ``threshold``).
 
     Samples without a severity (e.g. ``normal``, ``compound_fault``) are split randomly so both

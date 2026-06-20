@@ -9,6 +9,8 @@ state is restored before returning.
 from __future__ import annotations
 
 import copy
+import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -43,6 +45,34 @@ def class_weights(y: np.ndarray, num_classes: int) -> torch.Tensor:
     return torch.tensor(w, dtype=torch.float32)
 
 
+def _build_optimizer(
+    model: nn.Module, optimizer: str, lr: float, weight_decay: float
+) -> torch.optim.Optimizer:
+    if optimizer == "adam":
+        return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if optimizer == "adamw":
+        return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    raise ValueError(f"optimizer must be 'adam' or 'adamw', got {optimizer!r}")
+
+
+def _build_scheduler(
+    optimizer: torch.optim.Optimizer, scheduler: str | None, warmup_epochs: int, epochs: int
+) -> torch.optim.lr_scheduler.LRScheduler | None:
+    """Per-epoch cosine schedule with linear warmup (hand-rolled, no extra dependency)."""
+    if scheduler is None:
+        return None
+    if scheduler != "cosine_warmup":
+        raise ValueError(f"scheduler must be 'cosine_warmup' or None, got {scheduler!r}")
+
+    def lr_lambda(epoch: int) -> float:
+        if warmup_epochs > 0 and epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
+        return 0.5 * (1.0 + math.cos(math.pi * min(1.0, progress)))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+
 def train_model(
     model: nn.Module,
     train_ds: Dataset,
@@ -54,14 +84,29 @@ def train_model(
     patience: int = 8,
     weight: torch.Tensor | None = None,
     device: str | None = None,
+    optimizer: str = "adam",
+    weight_decay: float = 0.0,
+    label_smoothing: float = 0.0,
+    scheduler: str | None = None,
+    warmup_epochs: int = 0,
+    augment: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> tuple[nn.Module, History]:
-    """Train ``model`` with early stopping on val macro-F1; restore + return the best state."""
+    """Train ``model`` with early stopping on val macro-F1; restore + return the best state.
+
+    Defaults reproduce the original loop (plain Adam, no smoothing/schedule/augmentation), so
+    baseline callers are unaffected. The opt-in args (AdamW + weight decay, label smoothing,
+    cosine-warmup schedule, train-time ``augment`` hook) regularize the more overfit-prone
+    transformer (v0.3).
+    """
     dev = _resolve_device(device)
     model = model.to(dev)
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
-    criterion = nn.CrossEntropyLoss(weight=weight.to(dev) if weight is not None else None)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = nn.CrossEntropyLoss(
+        weight=weight.to(dev) if weight is not None else None, label_smoothing=label_smoothing
+    )
+    opt = _build_optimizer(model, optimizer, lr, weight_decay)
+    sched = _build_scheduler(opt, scheduler, warmup_epochs, epochs)
 
     history = History()
     best_state = copy.deepcopy(model.state_dict())
@@ -72,11 +117,15 @@ def train_model(
         running = 0.0
         for x, y in train_loader:
             x, y = x.to(dev), y.to(dev)
-            optimizer.zero_grad()
+            if augment is not None:
+                x = augment(x)
+            opt.zero_grad()
             loss = criterion(model(x), y)
             loss.backward()
-            optimizer.step()
+            opt.step()
             running += loss.item() * len(x)
+        if sched is not None:
+            sched.step()
         history.train_loss.append(running / len(train_loader.dataset))  # type: ignore[arg-type]
 
         val_loss, val_f1 = _evaluate(model, val_loader, criterion, dev)

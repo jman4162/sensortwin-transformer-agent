@@ -48,11 +48,13 @@ from sensortwin.models.baselines import (
 )
 from sensortwin.simulation import GenConfig, generate_dataset
 from sensortwin.simulation.events import EVENT_CLASSES
-from sensortwin.utils.config import load_synthetic_config
+from sensortwin.utils.config import load_synthetic_config, load_yaml
 from sensortwin.utils.io import load_dataset
 from sensortwin.utils.seeds import set_torch_seed
 
-DEEP_MODELS = {"cnn", "lstm"}
+DEEP_MODELS = {"cnn", "lstm", "transformer"}
+# Default comparison set excludes the transformer so quick runs stay fast; request it with
+# --models transformer (or include it explicitly).
 DEFAULT_MODELS = ["logreg", "random_forest", "xgboost", "cnn", "lstm"]
 
 
@@ -121,16 +123,53 @@ def _run_classical(
     return metrics
 
 
+def _build_deep_model(name: str) -> tuple[Any, dict[str, Any]]:
+    """Return ``(model, train_kwargs)`` for a deep model.
+
+    CNN/LSTM use their constructor defaults and the plain training loop. The transformer reads its
+    architecture and training recipe (AdamW / label smoothing / cosine-warmup / augmentation) from
+    ``configs/models/sensorpatchtst.yaml``.
+    """
+    from sensortwin.models.cnn import SensorCNN
+    from sensortwin.models.lstm import SensorLSTM
+
+    if name == "cnn":
+        return SensorCNN(), {}
+    if name == "lstm":
+        return SensorLSTM(), {}
+    if name == "transformer":
+        from sensortwin.models.transformer import SensorPatchTST
+        from sensortwin.training.augment import build_augment
+
+        cfg = load_yaml("configs/models/sensorpatchtst.yaml")
+        model = SensorPatchTST(**cfg.get("model", {}))
+        tcfg = dict(cfg.get("train", {}))
+        keys = (
+            "optimizer",
+            "lr",
+            "weight_decay",
+            "label_smoothing",
+            "scheduler",
+            "warmup_epochs",
+            "batch_size",
+            "patience",
+        )
+        train_kwargs: dict[str, Any] = {k: tcfg[k] for k in keys if k in tcfg}
+        augment = build_augment(tcfg.get("augment"))
+        if augment is not None:
+            train_kwargs["augment"] = augment
+        return model, train_kwargs
+    raise SystemExit(f"unknown deep model '{name}'")
+
+
 def _run_deep(
     name: str, Xtr_std, ytr, Xva_std, yva, Xte_std, X_test_raw, yte, standardizer, epochs, out_dir
 ) -> dict[str, Any]:
     import torch
 
-    from sensortwin.models.cnn import SensorCNN
-    from sensortwin.models.lstm import SensorLSTM
     from sensortwin.training.loop import class_weights, predict_proba, train_model
 
-    model: torch.nn.Module = SensorCNN() if name == "cnn" else SensorLSTM()
+    model, train_kwargs = _build_deep_model(name)
     n_params = sum(p.numel() for p in model.parameters())
     train_ds = SensorArrayDataset(Xtr_std, ytr).as_torch()
     val_ds = SensorArrayDataset(Xva_std, yva).as_torch()
@@ -138,7 +177,12 @@ def _run_deep(
 
     t0 = time.perf_counter()
     model, _ = train_model(
-        model, train_ds, val_ds, epochs=epochs, weight=class_weights(ytr, len(EVENT_CLASSES))
+        model,
+        train_ds,
+        val_ds,
+        epochs=epochs,
+        weight=class_weights(ytr, len(EVENT_CLASSES)),
+        **train_kwargs,
     )
     train_time = time.perf_counter() - t0
 
@@ -160,7 +204,7 @@ def _write_report(
 ) -> Path:
     """Assemble the markdown results report (spec §16 deliverable, §18 table, §7 model-zoo)."""
     lines = [
-        "# Baseline results (v0.2)",
+        "# Model results",
         "",
         f"Synthetic dataset: {cfg.n_samples} samples, T={cfg.T}, seed={cfg.seed}, "
         "leakage-safe random split (70/15/15), metrics on the held-out test split.",

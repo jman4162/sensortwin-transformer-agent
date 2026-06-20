@@ -6,6 +6,37 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-19 — v0.3 SensorPatchTST vs. baselines
+
+**Question.** Does the patch-transformer beat the strong v0.2 baselines on `SensorTwin-Synth`, and
+at what data scale does its inductive bias start to pay off?
+
+**Setup.** Same quick_demo data/split as v0.2 (2,000 samples, T=512, seed=0, 70/15/15).
+`SensorPatchTST`: per-channel patching (patch_len=16, stride=8 → 8×63 tokens), learned channel
+embedding, sinusoidal positions, 4-layer pre-norm encoder (d_model=128, 4 heads), attention pooling.
+Trained with AdamW + weight decay 0.01, label smoothing 0.1, cosine-warmup, and jitter/scaling/
+channel-dropout augmentation. 814k params.
+
+**Hypothesis.** At ~1.4k training samples the transformer would *trail* the cheaper baselines (it is
+the most data-hungry model); its advantage on cross-channel/compound events should only appear at
+larger scale.
+
+**Result (test split, quick_demo).** Macro-F1: xgboost 0.620 > cnn 0.504 > **transformer 0.435**.
+Transformer ECE 0.143, train time 459 s on CPU (vs 5 s for xgboost). It does not win any class here.
+
+**Interpretation.** Hypothesis confirmed: more capacity + less data = worse, and the augmentation /
+regularization did not close the gap at this scale. This is the intended "transformer is not the
+hero by default" result — reported honestly rather than tuned away. The fair test is `colab_standard`
+(20k) and, later, masked pretraining (v0.4) for label efficiency.
+
+**Caveats.** Single seed, quick-demo scale, CPU timings. Not a verdict on the architecture.
+
+**Next.** (1) Re-run at `colab_standard` with seed averaging. (2) v0.4 masked-patch pretraining →
+does pretraining + fine-tuning beat supervised-from-scratch at low label fractions? (3) Read the
+`make ablate` output: did channel-embedding / attention-pooling help as designed?
+
+---
+
 ## 2026-06-19 — v0.2 baselines established
 
 **Question.** Before building the transformer, what bar do strong non-transformer baselines set on

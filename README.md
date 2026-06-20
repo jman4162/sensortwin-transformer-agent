@@ -4,9 +4,10 @@ A reproducible, research-style benchmark for **multichannel sensor event classif
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.2 done.** The synthetic benchmark (Layer 1) and the baseline + evaluation suite
-> (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness) are implemented. The
-> transformer and the agentic runner are on the roadmap below.
+> Status: **v0.3 done.** The synthetic benchmark (Layer 1), the baseline + evaluation suite
+> (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness), and the `SensorPatchTST`
+> patch-transformer with an ablation campaign are implemented. The self-supervised pretraining and
+> agentic runner are on the roadmap below.
 
 ## Why this matters
 
@@ -72,11 +73,12 @@ The 10 event classes span an intentional difficulty gradient: local transients
 
 Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduction` (100k).
 
-## Baseline results (v0.2)
+## Results
 
 Quick-demo numbers (2k samples, leakage-safe 70/15/15 split, test set), produced by
-`make baselines`. **These are wiring/sanity figures, not research-grade.** Run `colab_standard`
-before drawing conclusions. Full report: [`reports/experiment_summaries/baseline_results.md`](reports/experiment_summaries/baseline_results.md).
+`make baselines` / `make transformer`. **These are wiring/sanity figures, not research-grade.** Run
+`colab_standard` before drawing conclusions. Full report:
+[`reports/experiment_summaries/baseline_results.md`](reports/experiment_summaries/baseline_results.md).
 
 | Model | Macro-F1 | Weighted-F1 | Accuracy | Macro-AUROC | ECE | Params | Train (s) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -85,12 +87,17 @@ before drawing conclusions. Full report: [`reports/experiment_summaries/baseline
 | **xgboost** | **0.620** | 0.652 | 0.660 | 0.920 | 0.114 | — | 5.1 |
 | cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 54k | 35.7 |
 | lstm | 0.338 | 0.360 | 0.393 | 0.817 | 0.063 | 39k | 25.4 |
+| transformer | 0.435 | 0.463 | 0.500 | 0.859 | 0.143 | 814k | 459 (CPU) |
 
 At this scale the **feature + gradient-boosting baseline (xgboost) leads** and the deep models
-trail, consistent with having only ~1.4k training samples. The easy classes are the long-range ones
-(`regime_shift`, `slow_degradation`, `oscillatory_instability`, F1 ≈ 0.9); the hard ones are
-`sensor_dropout`, `normal`, and `compound_fault`. The open question for v0.3 is whether a patch
-transformer beats these baselines on the cross-channel and compound events as data scales up.
+trail, consistent with having only ~1.4k training samples. The 814k-param transformer trails the
+most — it is the most data-hungry model and these runs are far below the data scale where its
+inductive bias should pay off. The easy classes are the long-range ones (`regime_shift`,
+`slow_degradation`, `oscillatory_instability`, F1 ≈ 0.9); the hard ones are `sensor_dropout`,
+`normal`, and `compound_fault`. The open question for v0.4+ is whether the patch transformer —
+especially after self-supervised pretraining — overtakes these baselines on the cross-channel and
+compound events at `colab_standard` scale. The §17 ablations (patch size, channel embedding,
+pooling) run via `make ablate`.
 
 ## Project principles
 
@@ -107,7 +114,7 @@ transformer beats these baselines on the cross-channel and compound events as da
 | --- | --- | --- |
 | v0.1 | Synthetic 8-channel benchmark, splits, tests | **done** |
 | v0.2 | Feature + CNN + LSTM baselines, metrics, calibration | **done** |
-| v0.3 | `SensorPatchTST` classifier + ablations | planned |
+| v0.3 | `SensorPatchTST` classifier + ablations | **done** |
 | v0.4 | Masked-patch pretraining, label-efficiency | planned |
 | v0.5 | Robustness, calibration, interpretability | planned |
 | v0.6 | NASA battery / C-MAPSS open-data adaptation | planned |
