@@ -1,0 +1,10 @@
+# SensorLSTM baseline hyperparameters (spec §9.1 sequential baseline).
+model:
+  hidden_size: 64
+  num_layers: 1
+  dropout: 0.3
+train:
+  lr: 0.001
+  batch_size: 64
+  epochs: 30
+  patience: 8

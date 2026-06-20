@@ -43,3 +43,7 @@ def statistical_features(X: np.ndarray) -> np.ndarray:
                 _lag1_autocorr(x),
             ]
     return feats.reshape(N, C * len(_FEATURE_NAMES))
+
+
+def statistical_feature_names(channels: list[str]) -> list[str]:
+    return [f"{ch}_{f}" for ch in channels for f in _FEATURE_NAMES]

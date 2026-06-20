@@ -71,11 +71,28 @@ These are the point of the project — preserve them in any implementation:
 
 ## Commands
 
-No build/test tooling exists yet. Once scaffolded, expect (per spec; confirm against the actual
-`pyproject.toml`/`Makefile` when they exist):
+Install: `pip install -e ".[dev]"` (core + tooling) or `".[ml,dev]"` (adds torch/sklearn/xgboost/
+matplotlib — needed for models, training, evaluation, and the baseline script).
 
-- Tests: `pytest` (single test: `pytest tests/test_model_forward.py::test_name`)
-- Lint/format: `ruff check .` and `black .`
-- Generate data / train / evaluate / run agent: the `scripts/*.py` entrypoints above.
+- Quality gates (all green; enforced in CI): `make check` = `ruff check .` + `mypy sensortwin scripts` + `pytest`.
+  Format with `black .` (CI runs `black --check .`). Single test: `pytest tests/test_metrics.py::test_brier_bounds`.
+- Generate data: `make data` or `python -m scripts.generate_synthetic --mode quick_demo`.
+- Train + evaluate baselines: `make baselines` or `python -m scripts.train_baseline --mode quick_demo --epochs 10`
+  → writes `reports/experiment_summaries/baseline_results.md` (+ metrics JSON/CSV and figures, gitignored).
 
-When you add real tooling, update this section with the verified commands.
+**macOS gotcha (already handled):** torch and xgboost each bundle an OpenMP runtime and
+segfault/deadlock when used in one process. `tests/conftest.py` and the top of
+`scripts/train_baseline.py` set `OMP_NUM_THREADS=1` + `KMP_DUPLICATE_LIB_OK=TRUE` before importing
+either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding code that touches both.
+
+## Implemented so far
+
+- **v0.1** — `simulation/` generator, `data/` (dataset, splits, `ChannelStandardizer`), `features/statistical.py`, `utils/`.
+- **v0.2** — `features/` (spectral, correlations, `build_feature_matrix`), `models/` (baselines.py:
+  LogReg/RF/XGBoost + IsolationForest; cnn.py; lstm.py), `training/loop.py`, `evaluation/`
+  (metrics, calibration, robustness, plots), `scripts/train_baseline.py`.
+
+CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
+(installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules
+that need the `ml` extra are intentionally not imported in package `__init__.py` files, so the core
+package imports without torch/sklearn; tests gate those with `pytest.importorskip`.

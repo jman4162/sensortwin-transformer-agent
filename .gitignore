@@ -29,6 +29,10 @@ runs/
 wandb/
 reports/figures/*
 !reports/figures/.gitkeep
+# Regenerable per-run artifacts (the human-readable *_results.md reports are kept).
+reports/experiment_summaries/figures/
+reports/experiment_summaries/metrics_*.json
+reports/experiment_summaries/metrics_*.csv
 
 # OS / editor
 .DS_Store

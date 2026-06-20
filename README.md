@@ -4,8 +4,9 @@ A reproducible, research-style benchmark for **multichannel sensor event classif
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.1 in progress** — the synthetic benchmark (Layer 1) is implemented. Modeling
-> (Layer 2) and the agentic runner (Layer 3) are on the roadmap below.
+> Status: **v0.2 done** — the synthetic benchmark (Layer 1) and the baseline + evaluation suite
+> (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness) are implemented. The
+> transformer and the agentic runner are on the roadmap below.
 
 ## Why this matters
 
@@ -29,6 +30,14 @@ pip install -e ".[dev]"          # core + test tooling; add ".[ml]" for the mode
 
 make test                        # run the suite
 make data                        # generate the quick-demo dataset to data/synth_quick_demo.npz
+make baselines                   # train + evaluate baselines (needs ".[ml]"), writes the report
+```
+
+Train and evaluate the baselines directly (requires the `ml` extra — `pip install -e ".[ml]"`):
+
+```bash
+python -m scripts.train_baseline --mode quick_demo --epochs 10
+# -> reports/experiment_summaries/baseline_results.md  (+ metrics JSON/CSV and figures)
 ```
 
 Generate a dataset directly:
@@ -63,6 +72,27 @@ The 10 event classes span an intentional difficulty gradient — local transient
 
 Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduction` (100k).
 
+## Baseline results (v0.2)
+
+Quick-demo numbers (2k samples, leakage-safe 70/15/15 split, test set), produced by
+`make baselines`. **These are wiring/sanity figures, not research-grade** — run `colab_standard`
+before drawing conclusions. Full report: [`reports/experiment_summaries/baseline_results.md`](reports/experiment_summaries/baseline_results.md).
+
+| Model | Macro-F1 | Weighted-F1 | Accuracy | Macro-AUROC | ECE | Params | Train (s) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| logreg | 0.571 | 0.593 | 0.587 | 0.898 | 0.122 | — | 0.0 |
+| random_forest | 0.543 | 0.579 | 0.607 | 0.915 | 0.181 | — | 1.7 |
+| **xgboost** | **0.620** | 0.652 | 0.660 | 0.920 | 0.114 | — | 5.1 |
+| cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 54k | 35.7 |
+| lstm | 0.338 | 0.360 | 0.393 | 0.817 | 0.063 | 39k | 25.4 |
+
+Early read (the kind of honest finding the project is built to surface): at this tiny scale the
+**feature + gradient-boosting baseline (xgboost) leads**, and the deep models trail — exactly what
+you'd expect with ~1.4k training samples. The easy classes are the long-range/obvious ones
+(`regime_shift`, `slow_degradation`, `oscillatory_instability`, F1 ≈ 0.9); the hard ones are
+`sensor_dropout`, `normal`, and `compound_fault`. The open question for v0.3 is whether a patch
+transformer beats these baselines on the cross-channel and compound events as data scales up.
+
 ## Project principles
 
 - **Reproducible**: every dataset/experiment is deterministic given its seed.
@@ -76,8 +106,8 @@ Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduc
 
 | Version | Scope | Status |
 | --- | --- | --- |
-| v0.1 | Synthetic 8-channel benchmark, splits, tests | **in progress** |
-| v0.2 | Feature + CNN + LSTM baselines, metrics | planned |
+| v0.1 | Synthetic 8-channel benchmark, splits, tests | **done** |
+| v0.2 | Feature + CNN + LSTM baselines, metrics, calibration | **done** |
 | v0.3 | `SensorPatchTST` classifier + ablations | planned |
 | v0.4 | Masked-patch pretraining, label-efficiency | planned |
 | v0.5 | Robustness, calibration, interpretability | planned |

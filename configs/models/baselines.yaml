@@ -1,0 +1,6 @@
+# Classical baseline settings (spec §9.1). Hyperparameters live in
+# sensortwin/models/baselines.py factories; this file selects which to run and anomaly framing.
+classical: [logreg, random_forest, xgboost]
+anomaly:
+  enabled: true
+  normal_class: 0   # EventClass.normal; anomaly = any other class (normal-vs-rest framing)

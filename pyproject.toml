@@ -25,6 +25,7 @@ dependencies = [
 ml = [
     "torch>=2.1",
     "scikit-learn>=1.3",
+    "xgboost>=2.0",
     "pandas>=2.0",
     "matplotlib>=3.7",
 ]
@@ -53,6 +54,11 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# E402: sets OpenMP env vars before importing torch/xgboost (must precede imports).
+# E501: assembles markdown report tables whose rows are intentionally long.
+"scripts/train_baseline.py" = ["E402", "E501"]
+
 [tool.black]
 line-length = 100
 target-version = ["py310"]
@@ -67,7 +73,8 @@ ignore_missing_imports = false
 warn_unused_ignores = true
 warn_redundant_casts = true
 
-# torch is an optional extra (the ml install); don't require stubs for it in the core typecheck.
+# Optional ml-extra libraries ship no (or partial) type stubs; don't require them for the
+# core typecheck. torch/sklearn/xgboost/matplotlib/scipy are all install-time optional.
 [[tool.mypy.overrides]]
-module = ["torch.*"]
+module = ["torch.*", "sklearn.*", "xgboost.*", "matplotlib.*", "scipy.*"]
 ignore_missing_imports = true

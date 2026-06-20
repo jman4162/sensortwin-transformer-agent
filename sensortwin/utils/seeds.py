@@ -24,3 +24,24 @@ def spawn_child_rngs(seed: int, n: int) -> list[np.random.Generator]:
     """
     seq = np.random.SeedSequence(seed)
     return [np.random.default_rng(s) for s in seq.spawn(n)]
+
+
+def set_torch_seed(seed: int) -> None:
+    """Seed Python/NumPy/torch for reproducible model training.
+
+    Guarded import: the core install has no torch, and seeding the RNGs that *do* exist should
+    still work. Sets deterministic cuDNN so GPU runs are reproducible at a small speed cost.
+    """
+    import random
+
+    random.seed(seed)
+    np.random.seed(seed)
+    try:
+        import torch
+    except ImportError:
+        return
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

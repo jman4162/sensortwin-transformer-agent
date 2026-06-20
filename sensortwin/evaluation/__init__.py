@@ -1,7 +1,13 @@
-"""Evaluation: metrics, robustness, calibration, interpretability (roadmap v0.2-v0.5).
+"""Evaluation: metrics, calibration, robustness, plots (roadmap v0.2-v0.5).
 
-Planned: ``metrics.py`` (accuracy, macro/weighted-F1, per-class P/R, AUROC, confusion matrix),
-``robustness.py`` (noise / missing-channel / domain-shift / short-window deltas),
-``calibration.py`` (ECE, Brier, reliability), ``interpretability.py``, ``plots.py``.
-Macro-F1 is the headline metric (classes are imbalanced). Not yet implemented.
+v0.2 ships: ``metrics.py`` (accuracy, macro/weighted-F1, per-class P/R, one-vs-rest AUROC,
+confusion matrix), ``calibration.py`` (ECE, multiclass Brier, reliability curve), ``robustness.py``
+(missing-channel probe), ``plots.py`` (confusion / reliability / per-class-F1 figures).
+Macro-F1 is the headline metric (classes are imbalanced).
+
+Planned (v0.5): full robustness suite (noise / domain-shift / short-window / rare-event),
+calibration study, and ``interpretability.py`` (attention / occlusion / saliency).
+
+Submodules require the ``ml`` extra (sklearn/matplotlib) and are not imported here so the core
+package stays importable without them.
 """

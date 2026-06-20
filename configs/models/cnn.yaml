@@ -1,0 +1,10 @@
+# SensorCNN baseline hyperparameters (spec §9.1 local-pattern baseline).
+model:
+  widths: [32, 64, 128]
+  kernel_size: 5
+  dropout: 0.3
+train:
+  lr: 0.001
+  batch_size: 64
+  epochs: 30
+  patience: 8
