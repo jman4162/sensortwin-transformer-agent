@@ -1,5 +1,6 @@
-# Private planning / spec docs (not for public remote)
+# Private planning / spec / reference docs (not for public remote)
 BACKGROUND-SPEC-GITIGNORE.md
+AI_WRITING_SLOP_Guide.md
 
 # Python
 __pycache__/

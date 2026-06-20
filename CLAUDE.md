@@ -21,14 +21,14 @@ sensor event classification**. It is a portfolio/educational artifact, not a pro
 system. Three layers, built strictly in this order (do not start with the agent or a large
 model):
 
-1. **Simulation** — synthetic 8-channel, physics-inspired time-series generator with 10 known
+1. **Simulation**: synthetic 8-channel, physics-inspired time-series generator with 10 known
    event classes (`normal`, `thermal_drift`, `voltage_sag`, `current_spike`, `sensor_dropout`,
    `oscillatory_instability`, `correlated_channel_fault`, `regime_shift`, `slow_degradation`,
    `compound_fault`). Deterministic given a seed.
-2. **Modeling** — classical/feature baselines, CNN, LSTM, then the main model `SensorPatchTST`
+2. **Modeling**: classical/feature baselines, CNN, LSTM, then the main model `SensorPatchTST`
    (PatchTST-inspired: per-channel patching + channel embeddings + transformer encoder over
    channel-patch tokens + attention pooling). Plus masked-patch self-supervised pretraining.
-3. **Agentic runner** — a constrained planner/runner/reviewer loop that reads metrics, proposes
+3. **Agentic runner**: a constrained planner/runner/reviewer loop that reads metrics, proposes
    one-variable ablations, patches configs, launches runs, and writes markdown reports. It
    automates the experiment workflow; it is not the core novelty.
 
@@ -68,6 +68,25 @@ These are the point of the project — preserve them in any implementation:
   run unbounded jobs, change more than one variable per ablation, claim improvements without
   statistical evidence, or hide failed experiments. Use Pydantic schemas, not free-form prompts;
   validate generated configs before running.
+
+## Writing style: avoid AI slop
+
+Before finishing any writing artifact (README, `reports/**`, future `model_card.md` and
+`paper_style_report.md`, docstrings, commit messages, PR bodies), scrub it for the patterns in
+`AI_WRITING_SLOP_Guide.md` (gitignored, repo root). This applies to generated prose too: the report
+strings in `scripts/train_baseline.py` produce a committed `.md`, so edit them, not just the output.
+
+Top tells to avoid:
+- Puffery and significance-inflation ("stands as a testament", "plays a vital role", "marking a
+  pivotal moment", "ever-evolving landscape").
+- Trailing "-ing" superficial analyses (", highlighting its importance", ", underscoring the role").
+- AI-vocabulary words used reflexively: delve, crucial, pivotal, robust, seamless, leverage, foster,
+  garner, intricate, showcase, underscore, tapestry, vibrant, realm.
+- Rule-of-three padding, gratuitous em-dashes, "Despite its challenges…" outros, and vague
+  attributions ("experts say", "studies show") with no concrete source.
+
+Prefer specific, falsifiable statements over editorializing. State the result; do not narrate its
+significance.
 
 ## Commands
 

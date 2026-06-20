@@ -1,10 +1,10 @@
 # SensorTwin Transformer Agent
 
-A reproducible, research-style benchmark for **multichannel sensor event classification** —
+A reproducible, research-style benchmark for **multichannel sensor event classification**:
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.2 done** — the synthetic benchmark (Layer 1) and the baseline + evaluation suite
+> Status: **v0.2 done.** The synthetic benchmark (Layer 1) and the baseline + evaluation suite
 > (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness) are implemented. The
 > transformer and the agentic runner are on the roadmap below.
 
@@ -13,14 +13,14 @@ robustness/calibration evaluation, and an agentic experiment runner.
 Many scientific and engineering systems emit structured multichannel time-series: voltage,
 current, temperature, vibration, telemetry. This project builds a *controllable* benchmark for
 learning from such signals. Because we own the data-generating process, we can test specific
-hypotheses — does a transformer's inductive bias actually help on cross-channel or long-range
-events vs. a CNN or feature baseline? — rather than memorizing synthetic artifacts.
+hypotheses (does a transformer's inductive bias actually help on cross-channel or long-range events
+vs. a CNN or feature baseline?) rather than reward memorizing synthetic artifacts.
 
 The project is built in three layers, **in order** (the agent comes last, on purpose):
 
-1. **Simulation** — synthetic 8-channel generator, 10 event classes, deterministic from a seed.
-2. **Modeling** — strong baselines (features, CNN, LSTM) + `SensorPatchTST` + masked pretraining.
-3. **Agentic runner** — a *constrained* planner/runner/reviewer loop that orchestrates ablations.
+1. **Simulation**: synthetic 8-channel generator, 10 event classes, deterministic from a seed.
+2. **Modeling**: strong baselines (features, CNN, LSTM) + `SensorPatchTST` + masked pretraining.
+3. **Agentic runner**: a *constrained* planner/runner/reviewer loop that orchestrates ablations.
 
 ## Quickstart
 
@@ -66,16 +66,16 @@ Channels are coupled by documented assumptions (voltage anti-correlates with cur
 temperature integrates current through a thermal lag; surface temperature lags core), so some
 event classes are detectable *only* through cross-channel relationships.
 
-The 10 event classes span an intentional difficulty gradient — local transients
+The 10 event classes span an intentional difficulty gradient: local transients
 (`current_spike`), long-range drift (`slow_degradation`), and cross-channel-only faults
-(`correlated_channel_fault`) — so the benchmark discriminates between model inductive biases.
+(`correlated_channel_fault`). This lets the benchmark discriminate between model inductive biases.
 
 Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduction` (100k).
 
 ## Baseline results (v0.2)
 
 Quick-demo numbers (2k samples, leakage-safe 70/15/15 split, test set), produced by
-`make baselines`. **These are wiring/sanity figures, not research-grade** — run `colab_standard`
+`make baselines`. **These are wiring/sanity figures, not research-grade.** Run `colab_standard`
 before drawing conclusions. Full report: [`reports/experiment_summaries/baseline_results.md`](reports/experiment_summaries/baseline_results.md).
 
 | Model | Macro-F1 | Weighted-F1 | Accuracy | Macro-AUROC | ECE | Params | Train (s) |
@@ -86,9 +86,8 @@ before drawing conclusions. Full report: [`reports/experiment_summaries/baseline
 | cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 54k | 35.7 |
 | lstm | 0.338 | 0.360 | 0.393 | 0.817 | 0.063 | 39k | 25.4 |
 
-Early read (the kind of honest finding the project is built to surface): at this tiny scale the
-**feature + gradient-boosting baseline (xgboost) leads**, and the deep models trail — exactly what
-you'd expect with ~1.4k training samples. The easy classes are the long-range/obvious ones
+At this scale the **feature + gradient-boosting baseline (xgboost) leads** and the deep models
+trail, consistent with having only ~1.4k training samples. The easy classes are the long-range ones
 (`regime_shift`, `slow_degradation`, `oscillatory_instability`, F1 ≈ 0.9); the hard ones are
 `sensor_dropout`, `normal`, and `compound_fault`. The open question for v0.3 is whether a patch
 transformer beats these baselines on the cross-channel and compound events as data scales up.
