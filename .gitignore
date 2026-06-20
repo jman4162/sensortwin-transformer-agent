@@ -1,0 +1,36 @@
+# Private planning / spec docs (not for public remote)
+BACKGROUND-SPEC-GITIGNORE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Generated data, checkpoints, run artifacts
+data/
+*.npz
+*.parquet
+*.pt
+*.ckpt
+runs/
+wandb/
+reports/figures/*
+!reports/figures/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

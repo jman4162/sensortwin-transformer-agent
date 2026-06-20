@@ -1,0 +1,30 @@
+# Base synthetic-data generation config.
+# Notebooks should use small modes; configs hold the larger research-reproduction defaults.
+# Run modes (spec §19) override the top-level fields; select one with --mode.
+
+T: 512
+seed: 0
+normalize: true
+
+artifacts:
+  gaussian_sigma: 0.02
+  impulse_rate: 0.002
+  impulse_magnitude: 0.3
+  calibration_scale: 0.01
+  clip_prob: 0.1
+  clip_channel_prob: 0.25
+  quantize_levels: 0      # 0 disables quantization
+
+# Uniform class sampling by default. Override for the rare-event split.
+class_weights: null
+
+modes:
+  quick_demo:
+    n_samples: 2000
+    T: 512
+  colab_standard:
+    n_samples: 20000
+    T: 512
+  full_reproduction:
+    n_samples: 100000
+    T: 512
