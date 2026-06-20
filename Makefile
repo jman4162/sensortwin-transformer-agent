@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt test data clean
+.PHONY: install install-ml dev lint fmt typecheck test check data clean
 
 install:           ## Install core package
 	pip install -e .
@@ -16,8 +16,13 @@ fmt:               ## Format with black + ruff import sort
 	black .
 	ruff check --fix .
 
+typecheck:         ## Static type check the library + scripts
+	mypy sensortwin scripts
+
 test:              ## Run the test suite
 	pytest
+
+check: lint typecheck test   ## Run all required gates (ruff + mypy + pytest)
 
 data:              ## Generate the quick-demo synthetic dataset
 	python -m scripts.generate_synthetic --config configs/synthetic/base.yaml --mode quick_demo
