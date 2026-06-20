@@ -6,6 +6,35 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-20 — v0.4 masked pretraining + label-efficiency (wired)
+
+**Question.** Does masked-patch self-supervised pretraining improve `SensorPatchTST`'s sample
+efficiency — i.e. beat a from-scratch transformer most when labels are scarce (spec §12.4)?
+
+**Setup.** Pretrain once on the unlabeled train split (40% per-channel patch masking, BERT-style
+learnable mask token, MSE on masked patches). Then a 5-arm sweep across {1, 5, 10, 100}% label
+fractions: scratch transformer, pretrained+fine-tuned, pretrained+linear-probe, CNN, XGBoost-
+features — all on the same split, scored by test macro-F1.
+
+**Hypothesis.** Pretraining helps most at 1–10% labels; the gap to scratch closes by 100% (the
+spec's documented "what did not work" pattern). XGBoost stays the strong low-data anchor.
+
+**Result.** Pipeline verified end to end on quick_demo (pretrain MSE decreases; all arms train and
+score). **No conclusion drawn:** at quick-demo scale with the 2-epoch wiring budget the transformer
+arms are barely trained (macro-F1 < 0.1), so the curve is dominated by XGBoost and the
+pretrain-vs-scratch deltas are within noise. The label-efficiency question needs `colab_standard`
+(20k) with the full pretrain/fine-tune epoch budget and several seeds.
+
+**Interpretation.** This phase delivers the *method and the honest measurement apparatus*, not a
+verdict. Per the model-zoo note, any gain may partly reflect the encoder learning the synthetic
+generator's regularities rather than transferable structure; a domain-shift test (v0.5/v0.6) is the
+real check.
+
+**Next.** Run `make label-efficiency` at `colab_standard` with 3–5 seeds; report the curve with
+error bars and state plainly whether pretraining helped, at which fractions, and where it did not.
+
+---
+
 ## 2026-06-19 — v0.3 SensorPatchTST vs. baselines
 
 **Question.** Does the patch-transformer beat the strong v0.2 baselines on `SensorTwin-Synth`, and

@@ -114,6 +114,11 @@ either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding co
   args (AdamW/weight-decay/label-smoothing/cosine-warmup/augment; defaults keep baselines unchanged),
   `configs/models/sensorpatchtst.yaml`, `scripts/ablate_transformer.py`. The transformer plugs into
   `train_baseline`'s `_run_deep` (run with `--models transformer`).
+- **v0.4** — `training/pretrain.py` (masked-patch `pretrain_model` + `freeze_encoder`/
+  `transfer_encoder`), `SensorPatchTST.embed`/`encode`/`mask_token` seams, `configs/models/
+  sensorpatchtst_pretrain.yaml`, `scripts/label_efficiency_sweep.py` (5-arm sweep:
+  scratch / pretrained-ft / pretrained-probe / cnn / xgboost across {1,5,10,100}% labels;
+  `make label-efficiency`).
 
 CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
 (installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules

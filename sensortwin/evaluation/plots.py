@@ -80,3 +80,28 @@ def plot_per_class_f1(
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return path
+
+
+def plot_label_efficiency(
+    curves: dict[str, dict[float, float]],
+    path: str | Path,
+    *,
+    title: str = "Label efficiency",
+    ylabel: str = "Macro-F1",
+) -> Path:
+    """Macro-F1 vs label fraction, one line per arm. ``curves[arm] = {fraction: score}``."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for arm, by_frac in curves.items():
+        fracs = sorted(by_frac)
+        ax.plot([f * 100 for f in fracs], [by_frac[f] for f in fracs], "o-", label=arm)
+    ax.set_xscale("log")
+    ax.set_xlabel("Labeled fraction of train (%)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path

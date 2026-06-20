@@ -59,6 +59,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 # E501: assembles markdown report tables whose rows are intentionally long.
 "scripts/train_baseline.py" = ["E402", "E501"]
 "scripts/ablate_transformer.py" = ["E402", "E501"]
+"scripts/label_efficiency_sweep.py" = ["E402", "E501"]
 
 [tool.black]
 line-length = 100

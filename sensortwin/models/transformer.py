@@ -113,28 +113,43 @@ class SensorPatchTST(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(d_model, num_classes),
         )
+        # Learnable token that replaces masked patch embeddings during v0.4 pretraining; unused in
+        # supervised forward, so it adds d_model params and nothing else.
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, d_model))
 
     def _patchify(self, x: torch.Tensor) -> torch.Tensor:
         """``[B, C, T]`` -> ``[B, C, N_patches, patch_len]`` via a strided sliding window."""
         # unfold over the time dimension; drops a tail shorter than patch_len.
         return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, C, T]
+    def embed(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """``[B, C, T]`` -> (tokens ``[B, C*N, d_model]``, raw patches ``[B, C*N, patch_len]``).
+
+        Patch projection + positional + channel embeddings, before the encoder. Returns the raw
+        patches alongside so masked-reconstruction pretraining has its targets in the same token
+        order (channel-major, patch-minor).
+        """
         B, C, _ = x.shape
         patches = self._patchify(x)  # [B, C, N, patch_len]
         n_patches = patches.shape[2]
 
         tokens = self.patch_proj(patches)  # [B, C, N, d_model]
-        # Sinusoidal position over patch index, shared across channels.
         pos = _sinusoidal_position(n_patches, self.d_model, x.device)  # [N, d_model]
         tokens = tokens + pos.view(1, 1, n_patches, self.d_model)
         if self.channel_embedding is not None:
             tokens = tokens + self.channel_embedding.view(1, C, 1, self.d_model)
 
-        tokens = tokens.reshape(B, C * n_patches, self.d_model)  # flatten channel-patch tokens
-        tokens = self.dropout(tokens)
-        encoded = self.encoder(tokens)  # [B, C*N, d_model]
+        tokens = tokens.reshape(B, C * n_patches, self.d_model)
+        targets = patches.reshape(B, C * n_patches, self.patch_len)
+        return tokens, targets
 
+    def encode(self, tokens: torch.Tensor) -> torch.Tensor:
+        """``[B, n_tokens, d_model]`` -> encoded ``[B, n_tokens, d_model]`` (dropout + encoder)."""
+        return self.encoder(self.dropout(tokens))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: [B, C, T]
+        tokens, _ = self.embed(x)
+        encoded = self.encode(tokens)  # [B, C*N, d_model]
         pooled = self.pool(encoded) if self.pool is not None else encoded.mean(dim=1)
         return self.head(pooled)

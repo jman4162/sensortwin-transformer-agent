@@ -38,6 +38,8 @@ reports/experiment_summaries/metrics_*.json
 reports/experiment_summaries/metrics_*.csv
 # Ablation table needs colab_standard + seed averaging to be meaningful; generate with `make ablate`.
 reports/experiment_summaries/transformer_ablations.md
+# Label-efficiency curve likewise needs colab_standard + seeds; generate with `make label-efficiency`.
+reports/experiment_summaries/label_efficiency.md
 
 # OS / editor
 .DS_Store

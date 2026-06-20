@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate label-efficiency clean
 
 install:           ## Install core package
 	pip install -e .
@@ -35,6 +35,9 @@ transformer:       ## Train SensorPatchTST alongside the baselines (quick-demo)
 
 ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
 	python -m scripts.ablate_transformer --mode quick_demo --epochs 15
+
+label-efficiency:  ## Masked-pretraining label-efficiency sweep (quick-demo; use colab_standard for real)
+	python -m scripts.label_efficiency_sweep --mode quick_demo --epochs-pretrain 20 --epochs-finetune 15
 
 clean:
 	rm -rf .pytest_cache .ruff_cache **/__pycache__ build dist *.egg-info

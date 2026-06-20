@@ -4,10 +4,11 @@ A reproducible, research-style benchmark for **multichannel sensor event classif
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.3 done.** The synthetic benchmark (Layer 1), the baseline + evaluation suite
-> (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness), and the `SensorPatchTST`
-> patch-transformer with an ablation campaign are implemented. The self-supervised pretraining and
-> agentic runner are on the roadmap below.
+> Status: **v0.4 done.** The synthetic benchmark (Layer 1), the baseline + evaluation suite
+> (Layer 2: feature/CNN/LSTM models, metrics, calibration, robustness), the `SensorPatchTST`
+> patch-transformer with an ablation campaign, and masked-patch self-supervised pretraining with a
+> label-efficiency sweep are implemented. The robustness/interpretability study and the agentic
+> runner are on the roadmap below.
 
 ## Why this matters
 
@@ -115,7 +116,7 @@ pooling) run via `make ablate`.
 | v0.1 | Synthetic 8-channel benchmark, splits, tests | **done** |
 | v0.2 | Feature + CNN + LSTM baselines, metrics, calibration | **done** |
 | v0.3 | `SensorPatchTST` classifier + ablations | **done** |
-| v0.4 | Masked-patch pretraining, label-efficiency | planned |
+| v0.4 | Masked-patch pretraining, label-efficiency | **done** |
 | v0.5 | Robustness, calibration, interpretability | planned |
 | v0.6 | NASA battery / C-MAPSS open-data adaptation | planned |
 | v0.7 | Agentic experiment runner + report | planned |
