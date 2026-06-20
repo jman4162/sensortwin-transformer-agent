@@ -20,7 +20,9 @@ env/
 .ipynb_checkpoints/
 
 # Generated data, checkpoints, run artifacts
-data/
+# NOTE: anchored to repo root with a leading slash so it does NOT match the
+# sensortwin/data/ source package.
+/data/
 *.npz
 *.parquet
 *.pt
