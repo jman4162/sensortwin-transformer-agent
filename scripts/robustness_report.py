@@ -12,10 +12,10 @@ Example:
 
 from __future__ import annotations
 
-import os
+from sensortwin.utils.runtime import configure_omp
 
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# macOS-only OpenMP guard; must precede torch/xgboost import.
+configure_omp()
 
 import argparse
 from pathlib import Path
@@ -56,7 +56,7 @@ def _gen_domain(base: dict, artifacts: dict, n: int, T: int, seed: int):
     return X, y, meta
 
 
-def _train_models(X, y, splits, standardizer, model_cfg, pre_cfg, epochs):
+def _train_models(X, y, splits, standardizer, model_cfg, pre_cfg, epochs, device=None):
     """Return {name: dict(predict, proba_fn, logits_fn|None)} trained on the (standardized) train."""
     import torch  # noqa: F401
 
@@ -74,11 +74,11 @@ def _train_models(X, y, splits, standardizer, model_cfg, pre_cfg, epochs):
     def torch_arm(model):
         def proba_fn(Xc):
             ds = SensorArrayDataset(standardizer.transform(Xc), np.zeros(len(Xc), int)).as_torch()
-            return predict_proba(model, ds)
+            return predict_proba(model, ds, device=device)
 
         def logits_fn(Xc):
             ds = SensorArrayDataset(standardizer.transform(Xc), np.zeros(len(Xc), int)).as_torch()
-            return predict_logits(model, ds)
+            return predict_logits(model, ds, device=device)
 
         return {
             "predict": lambda Xc: proba_fn(Xc).argmax(1),
@@ -98,17 +98,19 @@ def _train_models(X, y, splits, standardizer, model_cfg, pre_cfg, epochs):
     }
 
     cnn = SensorCNN()
-    cnn, _ = train_model(cnn, tr_ds, val_ds, epochs=epochs, weight=weight)
+    cnn, _ = train_model(cnn, tr_ds, val_ds, epochs=epochs, weight=weight, device=device)
     models["cnn"] = torch_arm(cnn)
 
     tf = SensorPatchTST(**model_cfg)
-    tf, _ = train_model(tf, tr_ds, val_ds, epochs=epochs, weight=weight)
+    tf, _ = train_model(tf, tr_ds, val_ds, epochs=epochs, weight=weight, device=device)
     models["transformer"] = torch_arm(tf)
 
     # pretrained transformer
-    pmodel, _, _ = pretrain_model(SensorPatchTST(**model_cfg), tr_ds, val_ds, epochs=epochs)
+    pmodel, _, _ = pretrain_model(
+        SensorPatchTST(**model_cfg), tr_ds, val_ds, epochs=epochs, device=device
+    )
     ptf = transfer_encoder(pmodel.state_dict(), SensorPatchTST(**model_cfg))
-    ptf, _ = train_model(ptf, tr_ds, val_ds, epochs=epochs, weight=weight)
+    ptf, _ = train_model(ptf, tr_ds, val_ds, epochs=epochs, weight=weight, device=device)
     models["pretrained_tf"] = torch_arm(ptf)
     return models
 
@@ -201,6 +203,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--mode", default="quick_demo")
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
 
@@ -223,7 +226,14 @@ def main(argv: list[str] | None = None) -> None:
 
     print("Training models on domain A...")
     models = _train_models(
-        X, y, splits, standardizer, model_cfg, load_yaml(args.pretrain_config), args.epochs
+        X,
+        y,
+        splits,
+        standardizer,
+        model_cfg,
+        load_yaml(args.pretrain_config),
+        args.epochs,
+        args.device,
     )
     rows, noise_curves = _evaluate(models, X, y, splits, Xb, args.seed)
     for n_, r in rows.items():

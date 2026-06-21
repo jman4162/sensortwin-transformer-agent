@@ -6,6 +6,72 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-21 — v0.7 agentic experiment runner + Colab GPU readiness
+
+**Question.** Can a constrained agent run useful one-variable ablations and write an honest failure
+analysis — without overclaiming — and is the training path ready for a real GPU run?
+
+**Setup.** A deterministic planner → runner → reviewer loop (`sensortwin/agents/`): the planner reads
+baseline metrics and proposes ≤3 one-variable ablations (hypothesis + expected failure mode), the
+runner trains each across seeds via the existing `train_model`, and the reviewer significance-tests
+each variant vs the baseline (`evaluation/statistics.py`, paired t-test + bootstrap CI) before
+calling anything an improvement. Guardrails (spec §13.5) are enforced by Pydantic schemas. GPU path:
+auto mixed-precision + pinned/worker DataLoader when CUDA is detected (CPU stays bit-identical),
+`--device`/`--no-amp` flags, a macOS-only OMP guard, and a Colab notebook.
+
+**Result.** The loop runs end to end and the guardrails hold. On a quick-demo wiring run the planner
+proposed `d_model=192`; the reviewer measured −0.032 macro-F1 (p=0.51) and reported **no_change**, not
+an improvement — which is exactly the proposal's own pre-registered "expected failure" (the wider
+model is data-hungry and overfits at small scale). CPU training is numerically unchanged (the
+existing training/pretrain tests pass bit-for-bit); AMP/workers engage only on CUDA.
+
+**Interpretation.** The agent automates the *workflow* and refuses to overclaim — the honest outcome
+the spec asks for. The point demonstrated here is the discipline (one variable per ablation, bounded
+jobs, significance-gated claims, every run reported, claims separated from measurements), not a new
+result. Real verdicts need `colab_standard` with the full seed budget.
+
+**Caveats.** Quick-demo scale; the planner is a fixed heuristic (LLM backend is a documented seam,
+not built). AMP trades FP32-bit-identity for ~1.5-2x GPU speed while staying seed-deterministic.
+
+**Next.** Run `make agent` and the Colab notebook at `colab_standard` for research-grade numbers;
+optionally backfill seed error-bars into the v0.3-v0.6 sweeps now that `statistics.py` exists.
+
+---
+
+## 2026-06-21 — v0.6 open-data validation on NASA C-MAPSS
+
+**Question.** Does the benchmark pipeline port to *real* multichannel sensor data, and does
+masked-patch pretraining on synthetic data transfer to it — or did it just learn the generator?
+
+**Setup.** A C-MAPSS adapter (`data/cmapss.py`) windows the 14 informative turbofan sensors and bins
+remaining-useful-life into 3 health stages (healthy / degrading / critical). A grouped-by-engine
+split prevents windows from one engine straddling train/test. Two runners: `real_data_report.py`
+trains XGBoost-features / CNN / SensorPatchTST from scratch on real data with the same metrics +
+robustness sweeps; `sim2real_transfer.py` pretrains the masked-patch encoder on synthetic (C=8),
+transfers the channel-agnostic temporal encoder to C-MAPSS (C=14, channel embedding re-initialized),
+and compares it against a real-pretrained upper bound, a from-scratch lower bound, and XGBoost across
+label fractions.
+
+**Result.** Method and apparatus delivered and CI-verified: the adapter, grouped split, and
+channel-flexible `transfer_encoder(strict_channels=False)` are covered by unit tests on a synthetic
+C-MAPSS fixture (no download needed), and `make check` is green. **No real-data numbers are claimed
+yet** — the raw C-MAPSS files are not committed, so the studies run once the dataset is downloaded
+and pointed at via `--raw-dir`, at `--mode full` for research-grade figures.
+
+**Interpretation.** This phase makes the synthetic-to-real check *runnable* and closes the model
+card's open item; the verdict (does synthetic-pretraining transfer? does the synthetic ordering of
+models hold on real turbofan data?) waits on the actual run. The honest framings are baked in: only
+the temporal encoder transfers across the channel-count change, and the 3-stage binning is a
+deliberate classification reframing of a regression benchmark.
+
+**Caveats.** C-MAPSS is natively RUL regression; binning is a modeling choice. FD001 (+FD003) only;
+the six-operating-condition subsets (FD002/FD004) need condition-aware normalization, deferred.
+
+**Next.** Download C-MAPSS, run both studies at `--mode full`, and report whether synthetic-encoder
+transfer beats scratch and approaches the real-pretrained bound. Then v0.7: the agentic runner.
+
+---
+
 ## 2026-06-20 — v0.5 robustness, calibration, interpretability
 
 **Question.** How do the models degrade under corruption and domain shift, are they calibrated, and

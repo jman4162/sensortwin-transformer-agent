@@ -46,6 +46,37 @@ def random_split(
     return splits
 
 
+def grouped_split(
+    groups: np.ndarray, seed: int, fracs: tuple[float, float, float] = (0.7, 0.15, 0.15)
+) -> SplitIndices:
+    """Split by group id so no group's members straddle two splits (e.g. windows from one engine).
+
+    A plain random split would leak: overlapping windows from the same engine would appear in both
+    train and test, inflating scores. Here the *unique groups* are partitioned, then expanded back
+    to sample indices. Asserts both index- and group-level disjointness.
+    """
+    groups = np.asarray(groups)
+    rng = np.random.default_rng(seed)
+    unique = np.unique(groups)
+    perm = rng.permutation(unique)
+    n = len(unique)
+    n_train = int(fracs[0] * n)
+    n_val = int(fracs[1] * n)
+    group_sets = {
+        "train": set(perm[:n_train].tolist()),
+        "val": set(perm[n_train : n_train + n_val].tolist()),
+        "test": set(perm[n_train + n_val :].tolist()),
+    }
+    splits = {name: np.where(np.isin(groups, list(gset)))[0] for name, gset in group_sets.items()}
+    _check_no_leakage(splits)
+    seen: set[int] = set()
+    for name, gset in group_sets.items():
+        if seen & gset:
+            raise ValueError(f"Split '{name}' shares groups with another split")
+        seen |= gset
+    return splits
+
+
 def severity_split(meta_events: list[dict[str, Any]], threshold: float, seed: int) -> SplitIndices:
     """Train on mild events, test on severe ones (severity >= ``threshold``).
 
@@ -76,6 +107,10 @@ def make_split(kind: str, y: np.ndarray, meta: dict, seed: int, **kwargs) -> Spl
     """Dispatch to a named split strategy."""
     if kind == "random":
         return random_split(y, seed, **kwargs)
+    if kind == "grouped":
+        if "groups" not in meta:
+            raise KeyError("grouped split requires meta['groups'] (one group id per sample)")
+        return grouped_split(np.asarray(meta["groups"]), seed, **kwargs)
     if kind == "severity":
         return severity_split(meta["events"], kwargs.get("threshold", 1.0), seed)
     raise NotImplementedError(

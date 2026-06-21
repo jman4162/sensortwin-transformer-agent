@@ -13,8 +13,8 @@ _FEATURE_NAMES = ["mean", "std", "min", "max", "slope", "lag1_autocorr"]
 
 
 def _slope(x: np.ndarray) -> float:
-    t = np.arange(len(x))
-    t = t - t.mean()
+    idx = np.arange(len(x))
+    t = idx - idx.mean()  # centered time index (float)
     denom = (t**2).sum()
     return float((t * (x - x.mean())).sum() / denom) if denom > 0 else 0.0
 

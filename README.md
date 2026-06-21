@@ -4,10 +4,12 @@ A reproducible, research-style benchmark for **multichannel sensor event classif
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.5 done.** Implemented: the synthetic benchmark (Layer 1); the baseline + evaluation
+> Status: **v0.7 done.** Implemented: the synthetic benchmark (Layer 1); the baseline + evaluation
 > suite (Layer 2); the `SensorPatchTST` patch-transformer + ablations; masked-patch pretraining with
-> a label-efficiency sweep; and the robustness / calibration / interpretability study with a
-> [model card](reports/model_card.md). Open-dataset validation and the agentic runner are next.
+> a label-efficiency sweep; the robustness / calibration / interpretability study with a
+> [model card](reports/model_card.md); open-dataset validation on NASA C-MAPSS (the same slate on
+> real turbofan sensors, plus a synthetic→real encoder-transfer test); and the constrained agentic
+> experiment runner (Layer 3) with GPU/Colab support. All three layers are in place.
 
 ## Why this matters
 
@@ -99,6 +101,58 @@ especially after self-supervised pretraining — overtakes these baselines on th
 compound events at `colab_standard` scale. The §17 ablations (patch size, channel embedding,
 pooling) run via `make ablate`.
 
+## Real-data validation (v0.6)
+
+The synthetic numbers above are a controlled testbed, not evidence of real-world performance. v0.6
+runs the same pipeline on **NASA C-MAPSS** turbofan data — 14 informative sensors, reframed as
+3-stage health classification (healthy / degrading / critical) by binning remaining-useful-life. The
+raw files are a US-government work (NASA PCoE) and are not committed; download them and point
+`--raw-dir` at the folder:
+
+```bash
+python -m scripts.fetch_cmapss --raw-dir /path/to/CMAPSSData --mode quick_demo
+python -m scripts.real_data_report --data data/cmapss_FD001 --mode quick_demo   # baselines on real data
+python -m scripts.sim2real_transfer --data data/cmapss_FD001 --mode quick_demo  # synthetic->real transfer
+```
+
+The split is **grouped by engine** (no engine's windows cross train/test). `sim2real_transfer`
+pretrains the masked-patch encoder on synthetic data and transfers the channel-agnostic *temporal*
+encoder to C-MAPSS (the 8→14 channel mismatch means the channel embedding is re-learned), against a
+real-pretrained upper bound and a from-scratch lower bound.
+
+- **Supported:** the synthetic-data pipeline (windowing, features, model classes, evaluation) runs
+  on real sensor data, and models can be ranked on it.
+- **Not claimed:** these are not state-of-the-art RUL estimates; the 3-stage binning is a deliberate
+  classification reframing, and only the temporal encoder (not channel identity) transfers.
+
+## Agentic experiment runner (v0.7)
+
+A constrained planner → runner → reviewer loop (Layer 3) that automates the experiment workflow — it
+is deliberately *not* the novelty. It reads the baseline metrics, proposes one-variable ablations
+(each with a hypothesis and an expected failure mode), runs each across seeds, and writes a report.
+
+```bash
+python -m scripts.run_agent --epochs 6 --seeds 3 --max-experiments 3   # -> agentic_ablation_report.md
+```
+
+Guardrails (spec §13.5) are enforced by Pydantic schemas, not prose: an experiment can't be
+constructed with more than one changed variable; `Guardrails.check` rejects out-of-bounds
+epochs/modes/dataset sizes; `write_config` refuses to overwrite a committed config or touch `data/`;
+and the reviewer calls a variant an **improvement only when the per-seed gain is statistically
+significant** (`evaluation/statistics.py`). Every run — including regressions and failures — is
+reported, and the agent's *hypotheses* are kept visually separate from the *measured* results. The
+planner is deterministic (no API key, runs in CI); an LLM backend is a documented pluggable seam.
+
+## Run on Colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jman4162/sensortwin-transformer-agent/blob/master/notebooks/03_transformer_training_colab.ipynb)
+
+[`notebooks/03_transformer_training_colab.ipynb`](notebooks/03_transformer_training_colab.ipynb)
+installs the package, generates `colab_standard` (20k), and trains `SensorPatchTST` on a GPU. Mixed
+precision and a pinned multi-worker DataLoader **switch on automatically when CUDA is detected**; on
+CPU the path is unchanged and bit-identical, so tests stay deterministic. Pass `--device` /
+`--no-amp` to the training scripts for explicit control.
+
 ## Project principles
 
 - **Reproducible**: every dataset/experiment is deterministic given its seed.
@@ -117,8 +171,8 @@ pooling) run via `make ablate`.
 | v0.3 | `SensorPatchTST` classifier + ablations | **done** |
 | v0.4 | Masked-patch pretraining, label-efficiency | **done** |
 | v0.5 | Robustness, calibration, interpretability + model card | **done** |
-| v0.6 | NASA battery / C-MAPSS open-data adaptation | planned |
-| v0.7 | Agentic experiment runner + report | planned |
+| v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **done** |
+| v0.7 | Agentic experiment runner + Colab GPU readiness | **done** |
 
 ## License
 

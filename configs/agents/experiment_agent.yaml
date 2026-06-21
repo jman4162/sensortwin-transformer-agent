@@ -1,0 +1,18 @@
+# Agentic experiment runner config (roadmap v0.7, spec §13).
+# Bounds the agent (guardrails §13.5) and points it at the model config it ablates.
+base_model_config: configs/models/sensorpatchtst.yaml
+
+guardrails:
+  max_epochs: 30            # reject any proposal asking for more (§13.5.3 bounded jobs)
+  max_n_samples: 20000      # colab_standard ceiling
+  allowed_modes: [quick_demo, colab_standard]
+  allowed_knobs: [patch_len, stride, d_model, num_layers, dropout, label_smoothing, lr, augment]
+  n_seeds: 3                # per-arm seeds for the significance test (§13.5.5)
+  n_experiments: 3          # planner proposes at most this many one-variable ablations
+  alpha: 0.05               # significance threshold for claiming an improvement
+
+# Quick-demo run: small data + few epochs so the whole loop finishes fast (wiring-grade numbers).
+run:
+  n_samples: 1500
+  T: 256
+  epochs: 6

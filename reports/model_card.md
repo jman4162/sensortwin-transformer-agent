@@ -28,20 +28,37 @@ current through a thermal lag; surface lags core) and 10 event classes spanning 
 gradient from local transients to cross-channel-only faults. Fully reproducible from a seed.
 
 ## 5. Synthetic-data limitations
-All training/eval data is synthetic. Performance here does not guarantee real-world performance:
-the model may exploit regularities of the generator rather than transferable structure. Synthetic-
-to-real transfer is explicitly out of scope until open-dataset validation (v0.6, NASA battery /
-C-MAPSS). "Synthetic data lets us test controlled hypotheses" — it is not real-world validation.
+The core benchmark is synthetic. Performance there does not guarantee real-world performance: the
+model may exploit regularities of the generator rather than transferable structure. "Synthetic data
+lets us test controlled hypotheses" — it is not real-world validation. v0.6 adds a real-data check
+(§6); the synthetic headline numbers still carry this caveat.
 
 ## 6. Open-data validation
-Not yet performed (planned v0.6). No claim of external validity is made.
+Implemented in v0.6 on **NASA C-MAPSS** turbofan data (14 informative sensors), reframed as 3-stage
+health classification (healthy / degrading / critical) by binning remaining-useful-life, with a
+grouped-by-engine split so no engine's windows cross train/test. Two studies ship:
+
+- `scripts/real_data_report.py` runs the same slate (XGBoost-features, CNN, SensorPatchTST) **from
+  scratch on real data** with the same metrics and robustness sweeps — does the harness and the
+  synthetic finding port?
+- `scripts/sim2real_transfer.py` pretrains the masked-patch encoder on synthetic data and transfers
+  the channel-agnostic *temporal* encoder to C-MAPSS (synthetic C=8 → real C=14, so the channel
+  embedding is re-initialized), against a real-pretrained upper bound and a from-scratch lower bound.
+
+**Claimed:** the synthetic pipeline runs on real sensor data and the models can be ranked there.
+**Not claimed:** state-of-the-art RUL/health estimation (C-MAPSS is natively a regression benchmark;
+the 3-stage binning is a deliberate classification reframing), or full encoder transfer (only the
+temporal patch encoder transfers across the channel-count change). The raw C-MAPSS files are a
+US-government work and are not redistributed here; run the studies after downloading them, and at
+`--mode full` for research-grade numbers rather than the quick-mode wiring figures.
 
 ## 7. Metrics
 Headline metric is **macro-F1** (classes are imbalanced); also report weighted-F1, per-class
 precision/recall, one-vs-rest AUROC, and the confusion matrix. Calibration via ECE, multiclass
 Brier, and reliability diagrams. Quick-demo numbers are sanity figures only; run `colab_standard`
 for research-grade results. Reproduce with `make baselines` / `make transformer` /
-`make robustness-study`.
+`make robustness-study`; real-data studies with `make real-data` / `make sim2real` (after the
+C-MAPSS download).
 
 ## 8. Robustness
 Evaluated as macro-F1 degradation from clean under: Gaussian-noise severity sweep, shorter

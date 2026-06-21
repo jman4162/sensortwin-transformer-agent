@@ -43,6 +43,11 @@ reports/experiment_summaries/label_efficiency.md
 # v0.5 study reports need colab_standard to be meaningful (model_card.md IS committed).
 reports/experiment_summaries/robustness_study.md
 reports/experiment_summaries/interpretability_report.md
+# v0.6 real-data study reports need the C-MAPSS download + --mode full to be meaningful.
+reports/experiment_summaries/cmapss_results.md
+reports/experiment_summaries/sim2real_transfer.md
+# v0.7 agent report is auto-generated (quick-scale, regenerable via `make agent`).
+reports/experiment_summaries/agentic_ablation_report.md
 
 # OS / editor
 .DS_Store

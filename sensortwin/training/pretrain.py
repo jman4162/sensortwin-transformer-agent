@@ -24,6 +24,8 @@ from sensortwin.training.loop import (
     History,
     _build_optimizer,
     _build_scheduler,
+    _loader_opts,
+    _resolve_amp,
     _resolve_device,
 )
 
@@ -60,20 +62,26 @@ def _apply_mask(tokens: torch.Tensor, mask: torch.Tensor, mask_token: torch.Tens
 
 @torch.no_grad()
 def _eval_recon(
-    model: SensorPatchTST, head: nn.Module, loader: DataLoader, mask_ratio: float, dev: torch.device
+    model: SensorPatchTST,
+    head: nn.Module,
+    loader: DataLoader,
+    mask_ratio: float,
+    dev: torch.device,
+    amp_on: bool = False,
 ) -> float:
     model.eval()
     head.eval()
     total, n = 0.0, 0
     for x, _ in loader:
         x = x.to(dev)
-        tokens, targets = model.embed(x)
-        b, n_tokens, _ = tokens.shape
-        mask = _make_patch_mask(b, model.in_channels, n_tokens // model.in_channels, mask_ratio)
-        mask = mask.to(dev)
-        encoded = model.encode(_apply_mask(tokens, mask, model.mask_token))
-        pred = head(encoded)
-        total += F.mse_loss(pred[mask], targets[mask]).item() * b
+        with torch.amp.autocast(device_type=dev.type, enabled=amp_on):
+            tokens, targets = model.embed(x)
+            b, n_tokens, _ = tokens.shape
+            mask = _make_patch_mask(b, model.in_channels, n_tokens // model.in_channels, mask_ratio)
+            mask = mask.to(dev)
+            encoded = model.encode(_apply_mask(tokens, mask, model.mask_token))
+            pred = head(encoded)
+            total += F.mse_loss(pred[mask].float(), targets[mask].float()).item() * b
         n += b
     return total / max(n, 1)
 
@@ -94,20 +102,30 @@ def pretrain_model(
     warmup_epochs: int = 5,
     augment: Callable[[torch.Tensor], torch.Tensor] | None = None,
     device: str | None = None,
+    amp: bool | None = None,
+    num_workers: int | None = None,
+    pin_memory: bool | None = None,
 ) -> tuple[nn.Module, nn.Module, History]:
     """Masked-patch reconstruction pretraining. Returns ``(model, recon_head, history)`` with the
     best-by-val-MSE encoder restored. ``model`` must expose ``embed``/``encode``/``mask_token``
-    (i.e. ``SensorPatchTST``). Labels in the dataset are ignored."""
+    (i.e. ``SensorPatchTST``). Labels in the dataset are ignored.
+
+    ``amp``/``num_workers``/``pin_memory`` (``None`` = auto-by-device) mirror :func:`train_model`:
+    mixed precision + a pinned multi-worker loader on CUDA, the original FP32 single-process path
+    off CUDA (so CPU/macOS pretraining stays bit-identical)."""
     dev = _resolve_device(device)
+    amp_on = _resolve_amp(dev, amp)
     model = model.to(dev)
     recon_head = nn.Linear(model.d_model, model.patch_len).to(dev)
 
     bundle = nn.ModuleList([model, recon_head])
     opt = _build_optimizer(bundle, optimizer, lr, weight_decay)
     sched = _build_scheduler(opt, scheduler, warmup_epochs, epochs)
+    scaler = torch.amp.GradScaler(dev.type, enabled=amp_on)
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size) if val_ds is not None else None
+    lopts = _loader_opts(dev, num_workers, pin_memory)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, **lopts)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, **lopts) if val_ds is not None else None
 
     history = History()
     best_val = float("inf")
@@ -122,15 +140,19 @@ def pretrain_model(
             x = x.to(dev)
             if augment is not None:
                 x = augment(x)
-            tokens, targets = model.embed(x)
-            b, n_tokens, _ = tokens.shape
-            mask = _make_patch_mask(b, model.in_channels, n_tokens // model.in_channels, mask_ratio)
-            mask = mask.to(dev)
-            encoded = model.encode(_apply_mask(tokens, mask, model.mask_token))
-            loss = F.mse_loss(recon_head(encoded)[mask], targets[mask])
             opt.zero_grad()
-            loss.backward()
-            opt.step()
+            with torch.amp.autocast(device_type=dev.type, enabled=amp_on):
+                tokens, targets = model.embed(x)
+                b, n_tokens, _ = tokens.shape
+                mask = _make_patch_mask(
+                    b, model.in_channels, n_tokens // model.in_channels, mask_ratio
+                )
+                mask = mask.to(dev)
+                encoded = model.encode(_apply_mask(tokens, mask, model.mask_token))
+                loss = F.mse_loss(recon_head(encoded)[mask].float(), targets[mask].float())
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
             running += loss.item() * b
             n += b
         if sched is not None:
@@ -139,7 +161,7 @@ def pretrain_model(
         history.train_loss.append(train_mse)
 
         if val_loader is not None:
-            val_mse = _eval_recon(model, recon_head, val_loader, mask_ratio, dev)
+            val_mse = _eval_recon(model, recon_head, val_loader, mask_ratio, dev, amp_on)
         else:
             val_mse = train_mse
         history.val_loss.append(val_mse)
@@ -169,13 +191,31 @@ def freeze_encoder(model: nn.Module) -> nn.Module:
     return model
 
 
-def transfer_encoder(pretrained_state: dict, model: nn.Module) -> nn.Module:
+def transfer_encoder(
+    pretrained_state: dict, model: nn.Module, *, strict_channels: bool = True
+) -> nn.Module:
     """Copy the pretrained encoder weights into ``model`` (a fresh classifier), leaving its head
-    and pooling at their fresh initialization."""
+    and pooling at their fresh initialization.
+
+    The temporal encoder (``patch_proj`` + transformer ``encoder`` + ``mask_token``) is
+    channel-count-agnostic, but ``channel_embedding`` is ``[C, d_model]`` and so cannot transfer
+    across a different channel count (synthetic C=8 -> real C=14). With ``strict_channels=False``
+    a shape-mismatched key is skipped (left at the target's fresh init) instead of raising — the
+    synthetic-to-real path, where we transfer the patch encoder and re-learn channel identity. The
+    default keeps the original behavior (a mismatch raises in ``load_state_dict``).
+    """
     own = model.state_dict()
-    transfer = {
-        k: v for k, v in pretrained_state.items() if k in own and k.startswith(_ENCODER_PREFIXES)
-    }
+    transfer: dict = {}
+    reinit: list[str] = []
+    for k, v in pretrained_state.items():
+        if k not in own or not k.startswith(_ENCODER_PREFIXES):
+            continue
+        if not strict_channels and v.shape != own[k].shape:
+            reinit.append(k)
+            continue
+        transfer[k] = v
     own.update(transfer)
     model.load_state_dict(own)
+    if reinit:
+        print(f"transfer_encoder: re-initialized (shape mismatch) {reinit}; transferred the rest")
     return model

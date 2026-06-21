@@ -10,7 +10,6 @@ which also uses both libraries in one process.
 
 from __future__ import annotations
 
-import os
+from sensortwin.utils.runtime import configure_omp
 
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+configure_omp()

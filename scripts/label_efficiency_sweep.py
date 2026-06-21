@@ -13,10 +13,10 @@ Example:
 
 from __future__ import annotations
 
-import os
+from sensortwin.utils.runtime import configure_omp
 
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# macOS-only OpenMP guard; must precede torch/xgboost import.
+configure_omp()
 
 import argparse
 import copy
@@ -81,10 +81,10 @@ def _stratified_subset(y: np.ndarray, idx: np.ndarray, fraction: float, rng) -> 
     return np.concatenate(keep)
 
 
-def _eval_torch(model, test_ds, y_test) -> dict[str, float]:
+def _eval_torch(model, test_ds, y_test, device=None) -> dict[str, float]:
     from sensortwin.training.loop import predict_proba
 
-    proba = predict_proba(model, test_ds)
+    proba = predict_proba(model, test_ds, device=device)
     return {
         "macro_f1": _macro_f1(y_test, proba.argmax(1)),
         "ece": expected_calibration_error(y_test, proba),
@@ -103,6 +103,7 @@ def _run_fraction(
     sup_block,
     ft_block,
     epochs_ft,
+    device=None,
 ) -> dict[str, dict[str, float]]:
     import torch  # noqa: F401
 
@@ -125,23 +126,29 @@ def _run_fraction(
 
     # 1. scratch transformer (supervised recipe)
     m: Any = SensorPatchTST(**model_cfg)
-    m, _ = train_model(m, sub_ds, val_ds, weight=weight, **_loop_kwargs(sup_block, epochs_ft))
-    out["scratch"] = _eval_torch(m, test_ds, y[te])
+    m, _ = train_model(
+        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(sup_block, epochs_ft)
+    )
+    out["scratch"] = _eval_torch(m, test_ds, y[te], device)
 
     # 2. pretrained + full fine-tune
     m = transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg))
-    m, _ = train_model(m, sub_ds, val_ds, weight=weight, **_loop_kwargs(ft_block, epochs_ft))
-    out["pretrained_ft"] = _eval_torch(m, test_ds, y[te])
+    m, _ = train_model(
+        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(ft_block, epochs_ft)
+    )
+    out["pretrained_ft"] = _eval_torch(m, test_ds, y[te], device)
 
     # 3. pretrained + linear probe (frozen encoder)
     m = freeze_encoder(transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg)))
-    m, _ = train_model(m, sub_ds, val_ds, weight=weight, **_loop_kwargs(ft_block, epochs_ft))
-    out["pretrained_probe"] = _eval_torch(m, test_ds, y[te])
+    m, _ = train_model(
+        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(ft_block, epochs_ft)
+    )
+    out["pretrained_probe"] = _eval_torch(m, test_ds, y[te], device)
 
     # 4. CNN baseline
     m = SensorCNN()
-    m, _ = train_model(m, sub_ds, val_ds, weight=weight, epochs=epochs_ft)
-    out["cnn"] = _eval_torch(m, test_ds, y[te])
+    m, _ = train_model(m, sub_ds, val_ds, weight=weight, epochs=epochs_ft, device=device)
+    out["cnn"] = _eval_torch(m, test_ds, y[te], device)
 
     # 5. XGBoost on engineered features
     clf = make_xgboost()
@@ -203,6 +210,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--fractions", default=None, help="comma-separated, e.g. 0.01,0.05,0.1,1.0")
     p.add_argument("--seeds", type=int, default=1)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
 
@@ -253,6 +261,7 @@ def main(argv: list[str] | None = None) -> None:
         val_ds,
         epochs=epochs_pre,
         augment=aug,
+        device=args.device,
         **pre_kwargs,
     )
     pretrained_state = copy.deepcopy(pmodel.state_dict())
@@ -275,6 +284,7 @@ def main(argv: list[str] | None = None) -> None:
                 sup_block,
                 ft_block,
                 epochs_ft,
+                args.device,
             )
             for a in ARMS:
                 acc[a][f].append(res[a]["macro_f1"])

@@ -125,6 +125,26 @@ either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding co
   `configs/synthetic/domain_shift.yaml`, `scripts/robustness_report.py` +
   `scripts/interpretability_report.py` (`make robustness-study` / `make interpretability`), and the
   committed `reports/model_card.md`.
+- **v0.6** — open-data validation on NASA C-MAPSS: `data/cmapss.py` (`load_cmapss` →
+  `(X[N,14,T], y, meta)`, RUL binned to 3 health stages), `splits.make_split("grouped", ...)`
+  (by-engine, no leakage), `pretrain.transfer_encoder(..., strict_channels=False)` (transfers the
+  channel-agnostic temporal encoder across C=8→14), `utils/config.load_mode_config`,
+  `configs/data/cmapss.yaml`, `scripts/fetch_cmapss.py` + `scripts/real_data_report.py`
+  (`make real-data`) + `scripts/sim2real_transfer.py` (`make sim2real`). Raw C-MAPSS `.txt` is **not
+  committed** (US-gov work; download and pass `--raw-dir`); tests run on a synthetic C-MAPSS fixture,
+  so CI needs no download. The committed artifacts are the model-card §6 update + research-log entry,
+  not the gitignored auto reports.
+- **v0.7** — agentic experiment runner (Layer 3) + Colab GPU readiness. Agent: `agents/schemas.py`
+  (Pydantic guardrails — one-variable rule + bounds), `tools.py` (`write_config`/`merge_overrides`,
+  refuses to touch `configs/`/`data/`), `planner.py` (`Planner` Protocol + deterministic
+  `HeuristicPlanner`, `LLMPlanner` stub), `runner.py` (`ExperimentRunner`, reuses `train_model`),
+  `reviewer.py` (significance-gated verdicts via `evaluation/statistics.py`), `scripts/run_agent.py`
+  (`make agent`), `configs/agents/experiment_agent.yaml`. GPU: `utils/runtime.py` `configure_omp()`
+  (Darwin-only OMP guard, replaces the unconditional blocks), auto-AMP + pinned/worker DataLoader in
+  `train_model`/`pretrain_model` (`None`=auto-by-device; CPU path bit-identical), `--device`/`--no-amp`
+  flags on the deep scripts, `utils/config.save_yaml`, `notebooks/03_transformer_training_colab.ipynb`.
+  The auto `agentic_ablation_report.md` is gitignored; agent/schema/stats tests are torch-free, with a
+  tiny torch-gated end-to-end loop test.
 
 CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
 (installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules

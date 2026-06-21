@@ -12,11 +12,10 @@ Example:
 
 from __future__ import annotations
 
-import os
+from sensortwin.utils.runtime import configure_omp
 
-# Precede torch import (OpenMP guard; see scripts/train_baseline.py / tests/conftest.py).
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# Precede torch import (macOS-only OpenMP guard; see scripts/train_baseline.py / tests/conftest.py).
+configure_omp()
 
 import argparse
 import time
@@ -67,7 +66,14 @@ def _macro_f1(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
 
 def _train_eval(
-    model_overrides: dict[str, Any], base_cfg: dict, splits, X, y, standardizer, epochs: int
+    model_overrides: dict[str, Any],
+    base_cfg: dict,
+    splits,
+    X,
+    y,
+    standardizer,
+    epochs: int,
+    device=None,
 ) -> dict[str, Any]:
     from sensortwin.models.transformer import SensorPatchTST
     from sensortwin.training.augment import build_augment
@@ -105,17 +111,18 @@ def _train_eval(
         val_ds,
         epochs=epochs,
         weight=class_weights(y[tr], len(EVENT_CLASSES)),
+        device=device,
         **train_kwargs,
     )
     train_time = time.perf_counter() - t0
 
-    y_proba = predict_proba(model, test_ds)
+    y_proba = predict_proba(model, test_ds, device=device)
     y_pred = y_proba.argmax(1)
     metrics = classification_metrics(y[te], y_pred, y_proba, EVENT_CLASSES)
 
     def predict_raw(Xc: np.ndarray) -> np.ndarray:
         ds = SensorArrayDataset(standardizer.transform(Xc), y[te]).as_torch()
-        return predict_proba(model, ds).argmax(1)
+        return predict_proba(model, ds, device=device).argmax(1)
 
     sweep = missing_channel_sweep(predict_raw, X[te], y[te], macro_f1_fn=_macro_f1)
     return {
@@ -169,6 +176,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--mode", default="quick_demo")
     p.add_argument("--epochs", type=int, default=15)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
 
@@ -188,7 +196,9 @@ def main(argv: list[str] | None = None) -> None:
     results: dict[str, dict] = {}
     for label, override, _hyp in ABLATIONS:
         print(f"--- {label} ---")
-        results[label] = _train_eval(override, base_cfg, splits, X, y, standardizer, args.epochs)
+        results[label] = _train_eval(
+            override, base_cfg, splits, X, y, standardizer, args.epochs, args.device
+        )
         print(f"  macro-F1={results[label]['macro_f1']:.3f}")
 
     report = _write_report(results, out_dir, args.mode, args.epochs)

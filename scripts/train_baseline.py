@@ -13,12 +13,11 @@ Examples
 
 from __future__ import annotations
 
-import os
+from sensortwin.utils.runtime import configure_omp
 
-# Must precede any torch/xgboost import: both bundle an OpenMP runtime and their thread pools
-# clash (segfault/deadlock) when used in one process on macOS. Single-threaded OMP sidesteps it.
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+# Must precede any torch/xgboost import: on macOS their bundled OpenMP runtimes clash
+# (segfault/deadlock). Gated to Darwin so Linux/Colab keeps multi-threaded feature extraction.
+configure_omp()
 
 import argparse
 import time
@@ -163,7 +162,19 @@ def _build_deep_model(name: str) -> tuple[Any, dict[str, Any]]:
 
 
 def _run_deep(
-    name: str, Xtr_std, ytr, Xva_std, yva, Xte_std, X_test_raw, yte, standardizer, epochs, out_dir
+    name: str,
+    Xtr_std,
+    ytr,
+    Xva_std,
+    yva,
+    Xte_std,
+    X_test_raw,
+    yte,
+    standardizer,
+    epochs,
+    out_dir,
+    device=None,
+    amp=None,
 ) -> dict[str, Any]:
     import torch
 
@@ -182,16 +193,18 @@ def _run_deep(
         val_ds,
         epochs=epochs,
         weight=class_weights(ytr, len(EVENT_CLASSES)),
+        device=device,
+        amp=amp,
         **train_kwargs,
     )
     train_time = time.perf_counter() - t0
 
-    y_proba = predict_proba(model, test_ds)
+    y_proba = predict_proba(model, test_ds, device=device)
     y_pred = y_proba.argmax(1)
 
     def predict_raw(Xc: np.ndarray) -> np.ndarray:
         ds = SensorArrayDataset(standardizer.transform(Xc), yte).as_torch()
-        return predict_proba(model, ds).argmax(1)
+        return predict_proba(model, ds, device=device).argmax(1)
 
     with torch.no_grad():
         return _evaluate_predictions(
@@ -296,8 +309,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--epochs", type=int, default=None, help="override deep-model epochs")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no-anomaly", action="store_true")
+    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
+    p.add_argument(
+        "--no-amp", action="store_true", help="force FP32 (default: AMP auto-on when CUDA)"
+    )
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
+    amp = False if args.no_amp else None
 
     set_torch_seed(args.seed)
     models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -345,6 +363,8 @@ def main(argv: list[str] | None = None) -> None:
                 standardizer,
                 epochs,
                 out_dir,
+                args.device,
+                amp,
             )
         else:
             raise SystemExit(f"unknown model '{name}'")

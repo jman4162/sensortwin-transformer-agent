@@ -1,0 +1,42 @@
+# NASA C-MAPSS turbofan -> 3-stage health classification (roadmap v0.6, spec §16).
+# Real-data validation config. The raw .txt files are a US-government work (NASA PCoE) and are NOT
+# committed; download them and point --raw-dir at the folder.
+data:
+  subset: FD001            # one subset, or a comma list e.g. "FD001,FD003" (two failure modes)
+  channels: [2, 3, 4, 7, 8, 9, 11, 12, 13, 14, 15, 17, 20, 21]  # 14 informative sensors
+  window: 48               # T: sliding-window length over cycles
+  stride: 12
+  rul_cap: 125             # piecewise-linear RUL cap (standard for C-MAPSS)
+  rul_bins: [30, 70]       # critical < 30 <= degrading < 70 <= healthy (RUL in cycles)
+  class_names: [healthy, degrading, critical]
+
+# Transformer architecture tuned for the short (T=48) real windows; smaller patches than the
+# synthetic config so there are enough tokens. in_channels is set from the data (14) at runtime.
+model:
+  d_model: 128
+  num_layers: 4
+  num_heads: 4
+  mlp_ratio: 4
+  dropout: 0.1
+  patch_len: 8
+  stride: 4
+  channel_embedding: true
+  pooling: attention
+train:
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  scheduler: cosine_warmup
+  warmup_epochs: 5
+  batch_size: 64
+  epochs: 30
+  patience: 8
+
+modes:
+  quick_demo:
+    subset: FD001
+    stride: 24             # fewer windows -> fast wiring run
+  full:
+    subset: "FD001,FD003"  # two failure modes
+    stride: 6

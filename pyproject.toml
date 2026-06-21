@@ -50,6 +50,8 @@ include = ["sensortwin*"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Notebooks use notebook idioms (semicolons to mute plot output, imports mid-cell); don't lint them.
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -62,6 +64,9 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "scripts/label_efficiency_sweep.py" = ["E402", "E501"]
 "scripts/robustness_report.py" = ["E402", "E501"]
 "scripts/interpretability_report.py" = ["E402", "E501"]
+"scripts/real_data_report.py" = ["E402", "E501"]
+"scripts/sim2real_transfer.py" = ["E402", "E501"]
+"scripts/run_agent.py" = ["E402", "E501"]
 
 [tool.black]
 line-length = 100
@@ -71,8 +76,10 @@ target-version = ["py310"]
 testpaths = ["tests"]
 addopts = "-q"
 
+# Target 3.12 to match the CI lint runner (and recent NumPy stubs that use PEP 695 `type`
+# statements). Runtime support for 3.10 is verified by the pytest matrix (3.10 + 3.12).
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 ignore_missing_imports = false
 warn_unused_ignores = true
 warn_redundant_casts = true
