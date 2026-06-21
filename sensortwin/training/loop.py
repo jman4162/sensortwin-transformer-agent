@@ -178,3 +178,17 @@ def predict_proba(
         probs = torch.softmax(model(x.to(dev)), dim=1)
         out.append(probs.cpu().numpy())
     return np.concatenate(out).astype(np.float32)
+
+
+@torch.no_grad()
+def predict_logits(
+    model: nn.Module, ds: Dataset, *, batch_size: int = 128, device: str | None = None
+) -> np.ndarray:
+    """Return raw logits ``[N, num_classes]`` (pre-softmax) — needed for temperature scaling."""
+    dev = _resolve_device(device)
+    model = model.to(dev).eval()
+    loader = DataLoader(ds, batch_size=batch_size)
+    out = []
+    for x, _ in loader:
+        out.append(model(x.to(dev)).cpu().numpy())
+    return np.concatenate(out).astype(np.float32)

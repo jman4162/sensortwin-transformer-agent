@@ -40,6 +40,9 @@ reports/experiment_summaries/metrics_*.csv
 reports/experiment_summaries/transformer_ablations.md
 # Label-efficiency curve likewise needs colab_standard + seeds; generate with `make label-efficiency`.
 reports/experiment_summaries/label_efficiency.md
+# v0.5 study reports need colab_standard to be meaningful (model_card.md IS committed).
+reports/experiment_summaries/robustness_study.md
+reports/experiment_summaries/interpretability_report.md
 
 # OS / editor
 .DS_Store

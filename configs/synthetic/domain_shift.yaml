@@ -1,0 +1,32 @@
+# Domain-shift study (spec §7.4, v0.5). Same 10 event classes, two measurement regimes:
+# train on domain_a (clean-ish), test generalization on domain_b (noisier sensors + tighter clip).
+# Used by scripts/robustness_report.py.
+T: 512
+seed: 0
+normalize: false   # standardization is fit on the train domain only (leakage-safe)
+
+domain_a:
+  gaussian_sigma: 0.02
+  impulse_rate: 0.002
+  impulse_magnitude: 0.3
+  calibration_scale: 0.01
+  clip_prob: 0.1
+  clip_channel_prob: 0.25
+  quantize_levels: 0
+
+domain_b:
+  gaussian_sigma: 0.06
+  impulse_rate: 0.01
+  impulse_magnitude: 0.6
+  calibration_scale: 0.04
+  clip_prob: 0.3
+  clip_channel_prob: 0.4
+  quantize_levels: 16
+
+modes:
+  quick_demo:
+    n_samples: 2000
+  colab_standard:
+    n_samples: 20000
+  full_reproduction:
+    n_samples: 100000

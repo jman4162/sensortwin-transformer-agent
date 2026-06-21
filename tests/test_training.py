@@ -12,7 +12,12 @@ from sensortwin.data.dataset import SensorArrayDataset  # noqa: E402
 from sensortwin.models.cnn import SensorCNN  # noqa: E402
 from sensortwin.simulation import GenConfig, generate_dataset  # noqa: E402
 from sensortwin.simulation.events import EVENT_CLASSES  # noqa: E402
-from sensortwin.training.loop import class_weights, predict_proba, train_model  # noqa: E402
+from sensortwin.training.loop import (  # noqa: E402
+    class_weights,
+    predict_logits,
+    predict_proba,
+    train_model,
+)
 
 
 def _split_datasets():
@@ -48,6 +53,15 @@ def test_class_weights_inverse_frequency():
     y = np.array([0, 0, 0, 0, 1])  # class 0 common, class 1 rare
     w = class_weights(y, 2).numpy()
     assert w[1] > w[0]  # rarer class gets larger weight
+
+
+def test_predict_logits_shape_differs_from_proba():
+    _, _, te, _ = _split_datasets()
+    model = SensorCNN(widths=(8, 16))
+    logits = predict_logits(model, te, device="cpu")
+    assert logits.shape == (20, len(EVENT_CLASSES))
+    # Logits are pre-softmax: rows do not sum to 1 in general.
+    assert not np.allclose(logits.sum(axis=1), 1.0)
 
 
 def test_transformer_trains_with_full_recipe():

@@ -105,3 +105,52 @@ def plot_label_efficiency(
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return path
+
+
+def plot_robustness_degradation(
+    curves: dict[str, dict[float, float]],
+    path: str | Path,
+    *,
+    title: str = "Robustness degradation",
+    xlabel: str = "Corruption severity",
+) -> Path:
+    """Macro-F1 vs corruption severity, one line per model. ``curves[model]={severity: score}``."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for model, by_sev in curves.items():
+        sevs = sorted(by_sev)
+        ax.plot(sevs, [by_sev[s] for s in sevs], "o-", label=model)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel("Macro-F1")
+    ax.set_ylim(0, 1)
+    ax.set_title(title)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
+def plot_attention_map(
+    weights: np.ndarray,
+    path: str | Path,
+    *,
+    channel_names: list[str] | None = None,
+    title: str = "Attention (channel x patch)",
+) -> Path:
+    """Heatmap of per-(channel, patch) attention weights ``[C, N]`` for one sample."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(8, 4))
+    im = ax.imshow(weights, aspect="auto", cmap="viridis")
+    fig.colorbar(im, ax=ax, fraction=0.046)
+    if channel_names is not None:
+        ax.set_yticks(range(len(channel_names)))
+        ax.set_yticklabels(channel_names)
+    ax.set_xlabel("Patch index (time)")
+    ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path

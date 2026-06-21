@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate label-efficiency clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate label-efficiency robustness-study interpretability clean
 
 install:           ## Install core package
 	pip install -e .
@@ -38,6 +38,12 @@ ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
 
 label-efficiency:  ## Masked-pretraining label-efficiency sweep (quick-demo; use colab_standard for real)
 	python -m scripts.label_efficiency_sweep --mode quick_demo --epochs-pretrain 20 --epochs-finetune 15
+
+robustness-study:  ## Robustness + calibration study (noise/window/missing-channel/domain-shift)
+	python -m scripts.robustness_report --mode quick_demo --epochs 10
+
+interpretability:  ## Attention / occlusion / integrated-gradients + faithfulness check
+	python -m scripts.interpretability_report --mode quick_demo --epochs 10
 
 clean:
 	rm -rf .pytest_cache .ruff_cache **/__pycache__ build dist *.egg-info

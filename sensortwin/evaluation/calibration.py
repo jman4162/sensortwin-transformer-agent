@@ -68,3 +68,33 @@ def reliability_curve(
         conf.append(float(confidences[mask].mean()) if mask.any() else float("nan"))
         acc.append(float(accuracies[mask].mean()) if mask.any() else float("nan"))
     return ReliabilityCurve(np.array(conf), np.array(acc), np.array(count))
+
+
+def _softmax(z: np.ndarray) -> np.ndarray:
+    z = z - z.max(axis=1, keepdims=True)
+    e = np.exp(z)
+    return e / e.sum(axis=1, keepdims=True)
+
+
+def apply_temperature(logits: np.ndarray, temperature: float) -> np.ndarray:
+    """Temperature-scaled probabilities: ``softmax(logits / T)`` (Guo et al. 2017)."""
+    return _softmax(logits / temperature)
+
+
+def fit_temperature(logits_val: np.ndarray, y_val: np.ndarray) -> float:
+    """Fit a single temperature T on a validation set by minimizing NLL (Guo et al. 2017).
+
+    Post-hoc calibration: divide logits by T before softmax. T>1 softens overconfident predictions
+    (the common failure under distribution shift, Ovadia et al. 2019). T is fit on val and then
+    applied to test; it does not change the argmax, so accuracy is unchanged.
+    """
+    from scipy.optimize import minimize_scalar
+
+    n = len(y_val)
+
+    def nll(temp: float) -> float:
+        proba = apply_temperature(logits_val, temp)
+        return float(-np.log(proba[np.arange(n), y_val] + 1e-12).mean())
+
+    res = minimize_scalar(nll, bounds=(0.05, 10.0), method="bounded")
+    return float(res.x)

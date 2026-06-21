@@ -6,6 +6,38 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-20 — v0.5 robustness, calibration, interpretability
+
+**Question.** How do the models degrade under corruption and domain shift, are they calibrated, and
+does the transformer's saliency actually localize the injected events?
+
+**Setup.** quick_demo, trained on domain A; evaluated on the test split under Gaussian-noise / short-
+window / missing-channel sweeps and on a noisier domain B. ECE clean vs shift, before/after
+temperature scaling. Interpretability: attention vs integrated-gradients saliency, scored against the
+generator's known event region (`localization_score`) vs a random baseline.
+
+**Result (quick_demo wiring).** Robustness: xgboost clean macro-F1 0.62 but collapses to 0.25 under
+domain shift; CNN is the most shift-robust (0.40 → 0.38); transformers undertrained at 2 epochs
+(~0.06–0.10). Temperature scaling cut the CNN's shifted ECE 0.15 → 0.05. Interpretability (27
+localized test events): **integrated gradients localized the event (0.234) above the random baseline
+(0.154); attention pooling did not (0.139, below random).**
+
+**Interpretation.** Two honest findings, both expected: (1) the strongest in-distribution model
+(xgboost) is the *least* robust to domain shift, while the CNN trades accuracy for robustness — a
+real model-selection tension. (2) The faithful, perturbation/gradient-based saliency tracks the
+ground-truth event, but **attention weights do not** — concrete evidence for the project's standing
+caveat that attention is a diagnostic, not an explanation (Jain & Wallace 2019). Temperature scaling
+behaves as theory predicts.
+
+**Caveats.** quick_demo + few epochs: transformers undertrained, single seed; numbers are wiring-
+grade. Domain B is a controlled regime change, not a real deployment shift.
+
+**Next.** v0.6 open-dataset (NASA) for the synthetic-to-real check; re-run the studies at
+`colab_standard` once the transformer is properly trained, and confirm whether attention localization
+improves with training (it may, but IG remains the more faithful tool).
+
+---
+
 ## 2026-06-20 — v0.4 masked pretraining + label-efficiency (wired)
 
 **Question.** Does masked-patch self-supervised pretraining improve `SensorPatchTST`'s sample

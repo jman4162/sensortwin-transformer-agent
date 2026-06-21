@@ -119,6 +119,12 @@ either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding co
   sensorpatchtst_pretrain.yaml`, `scripts/label_efficiency_sweep.py` (5-arm sweep:
   scratch / pretrained-ft / pretrained-probe / cnn / xgboost across {1,5,10,100}% labels;
   `make label-efficiency`).
+- **v0.5** — `evaluation/robustness.py` (noise/short-window severity sweeps), `calibration.py`
+  (temperature scaling), `interpretability.py` (attention map, occlusion, integrated gradients,
+  `localization_score` vs generator ground truth), `loop.predict_logits`,
+  `configs/synthetic/domain_shift.yaml`, `scripts/robustness_report.py` +
+  `scripts/interpretability_report.py` (`make robustness-study` / `make interpretability`), and the
+  committed `reports/model_card.md`.
 
 CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
 (installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules
