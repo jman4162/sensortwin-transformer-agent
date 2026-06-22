@@ -6,6 +6,33 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-22 — colab_standard GPU run: transformer at scale
+
+**Question.** Does `SensorPatchTST`'s inductive bias pay off at `colab_standard` scale — the open
+question since v0.3, where the transformer trailed the baselines at quick-demo?
+
+**Setup.** colab_standard (20,000 samples, T=512, seed=0), default `configs/models/
+sensorpatchtst.yaml`, 15 epochs, on a Tesla T4 with auto mixed precision and a pinned multi-worker
+DataLoader. Leakage-safe 70/15/15 split; `ChannelStandardizer` fit on train only.
+
+**Result.** Validation macro-F1 0.909; **test macro-F1 0.905, macro-AUROC 0.991**. The same model at
+quick-demo (2k) scored 0.435 — roughly a 2x jump from 10x the data.
+
+**Interpretation.** Confirms the data-hungry hypothesis: with enough data the transformer's capacity
+flips the quick-demo result. **Not claimed:** that it *beats the baselines* at this scale — the
+`colab_standard` baselines (XGBoost-on-features, CNN, LSTM) have not been run, and they may also rise
+at 20k. The project's headline question ("does the transformer overtake the baselines at scale, and on
+which classes") needs the full slate at the same scale with seed averaging.
+
+**Caveats.** Single seed (0); transformer-only; one split. AMP is seed-deterministic on a fixed GPU
+but not FP32-bit-identical, so expect small run-to-run variation across hardware.
+
+**Next.** Run `train_baseline --mode colab_standard --models logreg,xgboost,cnn,lstm,transformer`
+over ≥3 seeds for the apples-to-apples table, then the label-efficiency and robustness studies at
+`colab_standard` (wiring-grade until now). Once those land, update the README Results headline.
+
+---
+
 ## 2026-06-21 — v0.7 agentic experiment runner + Colab GPU readiness
 
 **Question.** Can a constrained agent run useful one-variable ablations and write an honest failure

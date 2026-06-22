@@ -74,7 +74,9 @@ accuracy.
 
 ## 10. Known failure modes
 - The transformer is **data-hungry**: at quick-demo scale (~1.4k train) it trails XGBoost-on-features
-  and the CNN; its inductive bias is expected to pay off only at larger scale.
+  and the CNN. A first `colab_standard` run (20k, single seed, GPU) confirms the expected scale-up —
+  test macro-F1 0.905 / AUROC 0.991, up from 0.435 at quick-demo. The multi-seed **baseline**
+  comparison at this scale is still pending, so no "beats the baselines at scale" claim is made yet.
 - Masked-pretraining benefit is **inconclusive at small scale** and may partly reflect learning the
   generator's regularities; the fair test is `colab_standard` with seed averaging and the
   domain-shift comparison.
