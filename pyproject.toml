@@ -75,6 +75,9 @@ target-version = ["py310"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Put the repo root on sys.path so tests can import top-level `scripts.*` (not part of the installed
+# package). Needed under the bare `pytest` console script used in CI, which does not add cwd.
+pythonpath = ["."]
 
 # Target 3.12 to match the CI lint runner (and recent NumPy stubs that use PEP 695 `type`
 # statements). Runtime support for 3.10 is verified by the pytest matrix (3.10 + 3.12).
