@@ -153,6 +153,12 @@ precision and a pinned multi-worker DataLoader **switch on automatically when CU
 CPU the path is unchanged and bit-identical, so tests stay deterministic. Pass `--device` /
 `--no-amp` to the training scripts for explicit control.
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jman4162/sensortwin-transformer-agent/blob/master/notebooks/04_colab_standard_comparison.ipynb)
+&nbsp;[`notebooks/04_colab_standard_comparison.ipynb`](notebooks/04_colab_standard_comparison.ipynb)
+runs the full model slate at `colab_standard` over several seeds, aggregates to mean ± std, and
+significance-tests the transformer against the strongest baseline — the apples-to-apples comparison
+behind the Results section. It writes a downloadable `summary.md`/`summary.json`.
+
 ## Project principles
 
 - **Reproducible**: every dataset/experiment is deterministic given its seed.
