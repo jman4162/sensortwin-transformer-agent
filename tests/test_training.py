@@ -94,6 +94,24 @@ def test_transformer_trains_with_full_recipe():
     assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-4)
 
 
+def test_evaluate_amp_path_with_weighted_loss():
+    """GPU-AMP regression: the weighted loss must be computed *inside* autocast, else fp16/bf16
+    logits clash with the fp32 class-weight tensor (`expected scalar type Half but found Float`).
+    Forcing ``amp_on=True`` on CPU (bf16 autocast) drives that path without a GPU — this raised
+    before the fix and passes after it."""
+    from torch.utils.data import DataLoader
+
+    from sensortwin.training.loop import _evaluate
+
+    _, va, _, ytr = _split_datasets()
+    loader = DataLoader(va, batch_size=16)
+    criterion = torch.nn.CrossEntropyLoss(weight=class_weights(ytr, len(EVENT_CLASSES)))
+    loss, macro_f1 = _evaluate(
+        SensorCNN(widths=(8, 16)), loader, criterion, torch.device("cpu"), amp_on=True
+    )
+    assert np.isfinite(loss) and np.isfinite(macro_f1)
+
+
 def test_default_path_uses_plain_adam_no_schedule():
     """Regression guard: the default loop path is unchanged (plain Adam, no scheduler/smoothing)."""
     from sensortwin.training.loop import _build_optimizer, _build_scheduler

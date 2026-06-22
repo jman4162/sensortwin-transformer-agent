@@ -197,7 +197,8 @@ def _evaluate(
             x, y = x.to(dev), y.to(dev)
             with torch.amp.autocast(device_type=dev.type, enabled=amp_on):
                 logits = model(x)
-            total_loss += criterion(logits, y).item() * len(x)
+                loss = criterion(logits, y)
+            total_loss += loss.item() * len(x)
             preds.append(logits.argmax(1).cpu().numpy())
             targets.append(y.cpu().numpy())
     y_true = np.concatenate(targets)
