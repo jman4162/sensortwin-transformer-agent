@@ -25,6 +25,23 @@ The project is built in three layers, **in order** (the agent comes last, on pur
 2. **Modeling**: strong baselines (features, CNN, LSTM) + `SensorPatchTST` + masked pretraining.
 3. **Agentic runner**: a *constrained* planner/runner/reviewer loop that orchestrates ablations.
 
+## At a glance
+
+The headline finding and the dataset, in two pictures (regenerate with `python -m scripts.make_figures`):
+
+| The benchmark | The result |
+| --- | --- |
+| ![Dataset gallery](docs/figures/dataset_gallery.png) | ![Macro-F1 vs scale](docs/figures/scale_comparison.png) |
+| One example per event class (event region shaded, affected channels in blue). | Macro-F1 vs training size: the transformer is **last at 2k, first at 20k** — its inductive bias pays off only at scale. |
+
+At `colab_standard` the transformer beats the best baseline on **every** class, most on the hard
+cross-channel ones; integrated-gradients saliency tracks (imperfectly) the injected event:
+
+| Per-class gain | Saliency vs truth |
+| --- | --- |
+| ![Per-class delta](docs/figures/perclass_delta.png) | ![Saliency overlay](docs/figures/saliency_overlay.png) |
+| Transformer − best-baseline F1 per class (all positive). | Integrated-gradients attribution vs the true event span (quick-scale illustration; attention ≠ explanation, see the model card). |
+
 ## Quickstart
 
 ```bash

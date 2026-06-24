@@ -154,3 +154,145 @@ def plot_attention_map(
     fig.savefig(path, dpi=120)
     plt.close(fig)
     return path
+
+
+def plot_signal_gallery(
+    X: np.ndarray,
+    events: list[dict],
+    class_names: list[str],
+    path: str | Path,
+    *,
+    channel_names: list[str] | None = None,
+) -> Path:
+    """One example signal per event class (``[C, T]`` each), 8 channels stacked, event span shaded.
+
+    ``events`` is the generator's per-sample metadata (``meta["events"]``); the first sample of each
+    class is shown, with its ``[start, start+duration]`` shaded on the affected channels.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n_classes = len(class_names)
+    cols = 2
+    rows = (n_classes + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(13, 2.0 * rows))
+    axes = np.asarray(axes).reshape(-1)
+    C = X.shape[1]
+    spacing = 3.5
+    for ci, name in enumerate(class_names):
+        ax = axes[ci]
+        idx = next((i for i, e in enumerate(events) if e.get("event_class") == ci), None)
+        if idx is None:
+            ax.set_visible(False)
+            continue
+        sig = X[idx]
+        ev = events[idx]
+        affected = set(ev.get("affected_channels") or [])
+        for c in range(C):
+            x = sig[c] - sig[c].mean()
+            x = x / (np.abs(x).max() + 1e-6)
+            ax.plot(x + c * spacing, lw=0.7, color="C0" if c in affected else "0.7")
+        start, dur = ev.get("start"), ev.get("duration")
+        if start is not None and dur:
+            ax.axvspan(start, start + dur, color="orange", alpha=0.18)
+        ax.set_title(name, fontsize=9)
+        ax.set_yticks([])
+        ax.set_xticks([])
+    for j in range(n_classes, len(axes)):
+        axes[j].set_visible(False)
+    fig.suptitle("SensorTwin-Synth: one example per event class (affected channels in blue)", y=1.0)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    return path
+
+
+def plot_scale_comparison(
+    curves: dict[str, dict[int, float]],
+    path: str | Path,
+    *,
+    title: str = "Macro-F1 vs training-set size",
+) -> Path:
+    """Macro-F1 vs training size (log-x), one line per model. ``curves[model]={n: f1}``."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for model, by_n in curves.items():
+        ns = sorted(by_n)
+        emph = model == "transformer"
+        ax.plot(
+            ns,
+            [by_n[n] for n in ns],
+            "o-",
+            label=model,
+            lw=2.4 if emph else 1.4,
+            zorder=3 if emph else 2,
+        )
+    ax.set_xscale("log")
+    ax.set_xlabel("Training samples")
+    ax.set_ylabel("Macro-F1 (test)")
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(True, which="both", alpha=0.2)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
+def plot_perclass_delta(
+    deltas: dict[str, float],
+    path: str | Path,
+    *,
+    title: str = "Per-class F1 delta (transformer − best baseline)",
+) -> Path:
+    """Sorted diverging horizontal bars of per-class F1 deltas (green positive, red negative)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    items = sorted(deltas.items(), key=lambda kv: kv[1])
+    names = [k for k, _ in items]
+    vals = [v for _, v in items]
+    colors = ["#2ca02c" if v >= 0 else "#d62728" for v in vals]
+    fig, ax = plt.subplots(figsize=(8, 0.45 * len(names) + 1))
+    ax.barh(range(len(names)), vals, color=colors)
+    ax.axvline(0, color="0.3", lw=0.8)
+    ax.set_yticks(range(len(names)))
+    ax.set_yticklabels(names)
+    ax.set_xlabel("Δ F1")
+    ax.set_title(title)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
+def plot_saliency_overlay(
+    signal: np.ndarray,
+    saliency: np.ndarray,
+    path: str | Path,
+    *,
+    event_span: tuple[int, int] | None = None,
+    channel_name: str | None = None,
+    title: str = "Saliency over signal",
+) -> Path:
+    """One channel's signal with its (normalized) saliency shaded and the true event span marked."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sal = np.abs(np.asarray(saliency, dtype=float))
+    sal = sal / (sal.max() + 1e-12)
+    t = np.arange(len(signal))
+    fig, ax = plt.subplots(figsize=(9, 3.2))
+    ax.fill_between(t, 0, sal, color="purple", alpha=0.25, label="saliency (|grad|, norm.)")
+    sig = np.asarray(signal, dtype=float)
+    sig = (sig - sig.min()) / (sig.max() - sig.min() + 1e-12)
+    sig_label = f"signal ({channel_name})" if channel_name else "signal"
+    ax.plot(t, sig, color="C0", lw=0.9, label=sig_label)
+    if event_span is not None:
+        ax.axvspan(event_span[0], event_span[1], color="orange", alpha=0.20, label="event region")
+    ax.set_xlabel("Time")
+    ax.set_yticks([])
+    ax.set_title(title)
+    ax.legend(loc="upper right", fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
