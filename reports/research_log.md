@@ -6,6 +6,48 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-23 — colab_standard comparison: transformer overtakes the baselines at scale
+
+**Question.** Does `SensorPatchTST` overtake the baselines at `colab_standard` scale, and on which
+classes — the headline question open since v0.3?
+
+**Setup.** Full slate (logreg / random_forest / xgboost / cnn / lstm / transformer) at colab_standard
+(20k, T=512), **3 seeds (0,1,2)**, 15 epochs, Tesla T4 with auto-AMP. Each seed is an independent
+draw (data + split + init); leakage-safe 70/15/15; `ChannelStandardizer` fit on train. Run via
+`notebooks/04_colab_standard_comparison.ipynb`; aggregated with `evaluation/statistics.py`.
+
+**Result (test, mean ± std over 3 seeds).**
+
+| Model | Macro-F1 | Macro-AUROC | ECE |
+| --- | ---: | ---: | ---: |
+| transformer | 0.900 ± 0.003 | 0.990 ± 0.000 | 0.095 ± 0.006 |
+| cnn | 0.844 ± 0.004 | 0.983 ± 0.001 | 0.023 ± 0.002 |
+| xgboost | 0.759 ± 0.004 | 0.967 ± 0.000 | 0.042 ± 0.004 |
+| logreg | 0.697 ± 0.006 | 0.950 ± 0.001 | 0.019 ± 0.003 |
+| random_forest | 0.691 ± 0.003 | 0.950 ± 0.000 | 0.185 ± 0.003 |
+| lstm | 0.545 ± 0.022 | 0.902 ± 0.008 | 0.056 ± 0.009 |
+
+Transformer vs best baseline (cnn): **+0.056 macro-F1, 95% CI [0.048, 0.061], paired p=0.006**.
+Per-class gain (transformer − cnn) is largest on `sensor_dropout` +0.135, `regime_shift` +0.120,
+`normal` +0.092; all reported per-class deltas are ≥ 0.
+
+**Interpretation.** The quick-demo ranking reverses: at 2k features+GBM led and the transformer was
+last (0.435); at 20k the deep models overtake and the transformer significantly tops the strongest
+baseline. The transformer's edge over the cnn is real but modest (+0.056); the larger effect is
+deep-vs-features. Its gains concentrate on the hard / cross-channel classes its inductive bias
+targets — the benchmark working as designed. **Trade-off:** the transformer is the most accurate but
+the least calibrated (ECE 0.095 vs cnn 0.023); random_forest is worst (0.185). Accuracy ranking ≠
+calibration ranking — a case for the v0.5 temperature scaling.
+
+**Caveats.** Synthetic data — not real-world validation. 15 epochs may not be fully converged (more
+could lift the deep models further). Single GPU / AMP; 3 seeds, one split family.
+
+**Next.** Temperature-scale the transformer (v0.5 `fit_temperature`) to close the calibration gap;
+run the label-efficiency and robustness studies at `colab_standard` (the remaining wiring-grade
+items).
+
+---
+
 ## 2026-06-22 — colab_standard GPU run: transformer at scale
 
 **Question.** Does `SensorPatchTST`'s inductive bias pay off at `colab_standard` scale — the open

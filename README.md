@@ -77,29 +77,47 @@ Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduc
 
 ## Results
 
-Quick-demo numbers (2k samples, leakage-safe 70/15/15 split, test set), produced by
-`make baselines` / `make transformer`. **These are wiring/sanity figures, not research-grade.** Run
-`colab_standard` before drawing conclusions. Full report:
-[`reports/experiment_summaries/baseline_results.md`](reports/experiment_summaries/baseline_results.md).
+At `colab_standard` scale (20,000 samples, leakage-safe 70/15/15 split, test set), over **3 seeds**
+(mean ± std), produced by [`notebooks/04_colab_standard_comparison.ipynb`](notebooks/04_colab_standard_comparison.ipynb)
+on a T4 GPU:
 
-| Model | Macro-F1 | Weighted-F1 | Accuracy | Macro-AUROC | ECE | Params | Train (s) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| logreg | 0.571 | 0.593 | 0.587 | 0.898 | 0.122 | — | 0.0 |
-| random_forest | 0.543 | 0.579 | 0.607 | 0.915 | 0.181 | — | 1.7 |
-| **xgboost** | **0.620** | 0.652 | 0.660 | 0.920 | 0.114 | — | 5.1 |
-| cnn | 0.504 | 0.526 | 0.540 | 0.887 | 0.082 | 54k | 35.7 |
-| lstm | 0.338 | 0.360 | 0.393 | 0.817 | 0.063 | 39k | 25.4 |
-| transformer | 0.435 | 0.463 | 0.500 | 0.859 | 0.143 | 814k | 459 (CPU) |
+| Model | Macro-F1 | Macro-AUROC | ECE |
+| --- | ---: | ---: | ---: |
+| **transformer** | **0.900 ± 0.003** | 0.990 ± 0.000 | 0.095 ± 0.006 |
+| cnn | 0.844 ± 0.004 | 0.983 ± 0.001 | 0.023 ± 0.002 |
+| xgboost | 0.759 ± 0.004 | 0.967 ± 0.000 | 0.042 ± 0.004 |
+| logreg | 0.697 ± 0.006 | 0.950 ± 0.001 | 0.019 ± 0.003 |
+| random_forest | 0.691 ± 0.003 | 0.950 ± 0.000 | 0.185 ± 0.003 |
+| lstm | 0.545 ± 0.022 | 0.902 ± 0.008 | 0.056 ± 0.009 |
 
-At this scale the **feature + gradient-boosting baseline (xgboost) leads** and the deep models
-trail, consistent with having only ~1.4k training samples. The 814k-param transformer trails the
-most — it is the most data-hungry model and these runs are far below the data scale where its
-inductive bias should pay off. The easy classes are the long-range ones (`regime_shift`,
-`slow_degradation`, `oscillatory_instability`, F1 ≈ 0.9); the hard ones are `sensor_dropout`,
-`normal`, and `compound_fault`. The open question for v0.4+ is whether the patch transformer —
-especially after self-supervised pretraining — overtakes these baselines on the cross-channel and
-compound events at `colab_standard` scale. The §17 ablations (patch size, channel embedding,
-pooling) run via `make ablate`.
+At 20k the ordering **flips** relative to small scale: the deep models overtake feature+GBM, and
+`SensorPatchTST` tops the strongest baseline (cnn) by **+0.056 macro-F1 (95% CI [0.048, 0.061],
+p=0.006**, paired over seeds — `evaluation/statistics.py`). The transformer's gains land on the
+hard, cross-channel / long-context classes its inductive bias targets: vs the cnn it gains
+`sensor_dropout` +0.135, `regime_shift` +0.120, `normal` +0.092. One honest trade-off: the
+transformer is the **most accurate but least calibrated** model here (ECE 0.095 vs cnn 0.023) —
+post-hoc temperature scaling (`evaluation/calibration.py`) is the fix. This is the result a
+*controllable* benchmark is built to surface: the transformer's inductive bias pays off at scale,
+not at the small-data scale below.
+
+### Small-scale contrast (quick-demo, 2k — wiring-grade)
+
+The same slate at 2k (`make baselines` / `make transformer`) shows the opposite ranking, because the
+deep models are data-starved:
+
+| Model | Macro-F1 | Macro-AUROC | ECE | Params |
+| --- | ---: | ---: | ---: | ---: |
+| **xgboost** | **0.620** | 0.920 | 0.114 | — |
+| logreg | 0.571 | 0.898 | 0.122 | — |
+| random_forest | 0.543 | 0.915 | 0.181 | — |
+| cnn | 0.504 | 0.887 | 0.082 | 54k |
+| transformer | 0.435 | 0.859 | 0.143 | 814k |
+| lstm | 0.338 | 0.817 | 0.063 | 39k |
+
+At 2k the **feature + gradient-boosting baseline (xgboost) leads** and the 814k-param transformer
+trails — the most data-hungry model, far below the scale where its inductive bias pays off. The
+contrast between the two tables is the benchmark's whole point. The §17 ablations (patch size,
+channel embedding, pooling) run via `make ablate`.
 
 ## Real-data validation (v0.6)
 

@@ -55,10 +55,10 @@ US-government work and are not redistributed here; run the studies after downloa
 ## 7. Metrics
 Headline metric is **macro-F1** (classes are imbalanced); also report weighted-F1, per-class
 precision/recall, one-vs-rest AUROC, and the confusion matrix. Calibration via ECE, multiclass
-Brier, and reliability diagrams. Quick-demo numbers are sanity figures only; run `colab_standard`
-for research-grade results. Reproduce with `make baselines` / `make transformer` /
-`make robustness-study`; real-data studies with `make real-data` / `make sim2real` (after the
-C-MAPSS download).
+Brier, and reliability diagrams. Quick-demo numbers are sanity figures only; the research-grade
+`colab_standard` comparison (3 seeds) runs via `notebooks/04_colab_standard_comparison.ipynb`.
+Reproduce the smaller runs with `make baselines` / `make transformer` / `make robustness-study`;
+real-data studies with `make real-data` / `make sim2real` (after the C-MAPSS download).
 
 ## 8. Robustness
 Evaluated as macro-F1 degradation from clean under: Gaussian-noise severity sweep, shorter
@@ -70,13 +70,16 @@ on data scale and is not claimed beyond the synthetic benchmark.
 ECE / Brier / reliability are reported on clean and shifted test sets. Post-hoc **temperature
 scaling** (one parameter fit on validation) is provided; as is standard, models tend to be more
 overconfident under distribution shift, and temperature scaling reduces ECE without changing
-accuracy.
+accuracy. Accuracy and calibration rankings differ: at `colab_standard` the transformer is the most
+accurate but the least calibrated (ECE ≈0.095 vs the CNN's ≈0.023), so temperature scaling matters
+most for it.
 
 ## 10. Known failure modes
-- The transformer is **data-hungry**: at quick-demo scale (~1.4k train) it trails XGBoost-on-features
-  and the CNN. A first `colab_standard` run (20k, single seed, GPU) confirms the expected scale-up —
-  test macro-F1 0.905 / AUROC 0.991, up from 0.435 at quick-demo. The multi-seed **baseline**
-  comparison at this scale is still pending, so no "beats the baselines at scale" claim is made yet.
+- The transformer is **data-hungry**: at quick-demo scale (~1.4k train) it is last (macro-F1 0.435,
+  behind XGBoost-on-features and the CNN). At `colab_standard` (20k, 3 seeds) the ranking flips — it
+  leads at 0.900 ± 0.003 and beats the strongest baseline (CNN, 0.844) by +0.056 macro-F1 (p=0.006).
+  So the inductive bias pays off at scale, not below it; the win lands on the hard cross-channel
+  classes (`sensor_dropout`, `regime_shift`, `normal`).
 - Masked-pretraining benefit is **inconclusive at small scale** and may partly reflect learning the
   generator's regularities; the fair test is `colab_standard` with seed averaging and the
   domain-shift comparison.
