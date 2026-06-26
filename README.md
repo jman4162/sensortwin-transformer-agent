@@ -112,8 +112,9 @@ At 20k the ordering **flips** relative to small scale: the deep models overtake 
 p=0.006**, paired over seeds — `evaluation/statistics.py`). The transformer's gains land on the
 hard, cross-channel / long-context classes its inductive bias targets: vs the cnn it gains
 `sensor_dropout` +0.135, `regime_shift` +0.120, `normal` +0.092. One honest trade-off: the
-transformer is the **most accurate but least calibrated** model here (ECE 0.095 vs cnn 0.023) —
-post-hoc temperature scaling (`evaluation/calibration.py`) is the fix. This is the result a
+transformer is the **most accurate but least calibrated** model here (ECE 0.095 vs cnn 0.023) — a
+single temperature fit on validation (T≈0.62, `evaluation/calibration.py`) cuts its ECE to ≈0.017
+with macro-F1 unchanged. This is the result a
 *controllable* benchmark is built to surface: the transformer's inductive bias pays off at scale,
 not at the small-data scale below.
 

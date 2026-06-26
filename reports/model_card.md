@@ -71,8 +71,9 @@ ECE / Brier / reliability are reported on clean and shifted test sets. Post-hoc 
 scaling** (one parameter fit on validation) is provided; as is standard, models tend to be more
 overconfident under distribution shift, and temperature scaling reduces ECE without changing
 accuracy. Accuracy and calibration rankings differ: at `colab_standard` the transformer is the most
-accurate but the least calibrated (ECE ≈0.095 vs the CNN's ≈0.023), so temperature scaling matters
-most for it.
+accurate but the least calibrated (ECE ≈0.095 vs the CNN's ≈0.023). A single temperature fit on the
+validation logits (T≈0.62) cuts its test ECE to ≈0.017 with macro-F1 unchanged — most accurate **and**
+well-calibrated after a one-parameter fit.
 
 ## 10. Known failure modes
 - The transformer is **data-hungry**: at quick-demo scale (~1.4k train) it is last (macro-F1 0.435,
@@ -80,9 +81,12 @@ most for it.
   leads at 0.900 ± 0.003 and beats the strongest baseline (CNN, 0.844) by +0.056 macro-F1 (p=0.006).
   So the inductive bias pays off at scale, not below it; the win lands on the hard cross-channel
   classes (`sensor_dropout`, `regime_shift`, `normal`).
-- Masked-pretraining benefit is **inconclusive at small scale** and may partly reflect learning the
-  generator's regularities; the fair test is `colab_standard` with seed averaging and the
-  domain-shift comparison.
+- Masked-pretraining **did not improve label efficiency** at `colab_standard` (1 seed, reduced
+  budget): pretrained-then-fine-tuned trailed from-scratch at every label fraction and the frozen
+  linear probe was near-useless. This is confounded by a lower fine-tune learning rate / short
+  schedule that undertrains the pretrained arms, so it is "no help at this budget," not a verdict —
+  a matched-budget, multi-seed re-run is pending. Any gain may also reflect the encoder learning the
+  generator's regularities rather than transferable structure.
 - Engineered features + gradient boosting are **surprisingly strong** on simple drift/spike events.
 - The hardest classes are `sensor_dropout`, `normal`, and `compound_fault`.
 

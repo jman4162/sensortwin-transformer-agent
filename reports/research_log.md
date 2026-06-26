@@ -6,6 +6,44 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-06-25 — colab_standard follow-ups: calibration win, pretraining null
+
+**Question.** (1) Does temperature scaling fix the transformer's overconfidence at scale? (2) Does
+masked-patch pretraining improve label efficiency at colab_standard?
+
+**Setup.** colab_standard (20k), T4 GPU. Calibration: train the transformer (1 seed, 15 epochs),
+fit one temperature on the validation logits (`evaluation/calibration.fit_temperature`), re-measure
+ECE on test. Label efficiency: `scripts/label_efficiency_sweep` at a reduced first-run budget —
+1 seed, pretrain 30 epochs / fine-tune 15 epochs — over label fractions {1, 5, 10, 100}%.
+
+**Result — calibration.** ECE **0.092 → 0.017 at T=0.62**; argmax is invariant, so macro-F1 is
+unchanged. The transformer's overconfidence is corrected by a single parameter.
+
+**Result — label efficiency (test macro-F1).**
+
+| Fraction | scratch | pretrained_ft | pretrained_probe | cnn | xgboost |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1% | 0.100 | 0.124 | 0.035 | 0.352 | 0.429 |
+| 5% | 0.260 | 0.129 | 0.097 | 0.520 | 0.604 |
+| 10% | 0.519 | 0.219 | 0.124 | 0.613 | 0.664 |
+| 100% | 0.893 | 0.744 | 0.168 | 0.832 | 0.764 |
+
+**Interpretation.** Calibration: a clean win — "most accurate **and** well-calibrated after a
+one-parameter fit." Label efficiency: masked pretraining **did not help** — `pretrained_ft` ≤
+`scratch` at every fraction except a hair at 1%, and the frozen linear probe is near-useless. Feature
+baselines (xgboost, cnn) dominate at 1–10% — the data-hungry story again.
+
+**Caveats.** Label efficiency is single-seed and under a reduced budget. A real confound: the
+pretrained arms fine-tune at lr 1e-4 for only 15 epochs while `scratch` uses lr 1e-3, so they are
+likely undertrained — the 100% gap (0.744 vs 0.893) is the tell. This is "did not help *at this
+budget*," not "pretraining doesn't transfer."
+
+**Next.** Fair re-run: `--epochs-finetune 30`+ (ideally a matched fine-tune LR) with ≥3 seeds before
+concluding. The recipe (40% masking, MSE reconstruction) may also simply not transfer on this
+synthetic benchmark — itself a legitimate finding once the budget is matched.
+
+---
+
 ## 2026-06-23 — colab_standard comparison: transformer overtakes the baselines at scale
 
 **Question.** Does `SensorPatchTST` overtake the baselines at `colab_standard` scale, and on which
