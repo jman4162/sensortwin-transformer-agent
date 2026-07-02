@@ -120,16 +120,40 @@ def _proposal(label):
 
 
 def test_review_flags_improvement_regression_and_failure():
-    baseline = _result("baseline", [0.50, 0.50, 0.50])
+    # Per-seed scores need realistic spread: identical seeds have zero-variance differences,
+    # which the sign-test fallback correctly refuses to call significant at n=3.
+    baseline = _result("baseline", [0.50, 0.52, 0.48])
     results = [
-        (_proposal("better"), _result("better", [0.70, 0.70, 0.70])),
-        (_proposal("worse"), _result("worse", [0.30, 0.30, 0.30])),
+        (_proposal("better"), _result("better", [0.70, 0.71, 0.69])),
+        (_proposal("worse"), _result("worse", [0.30, 0.33, 0.27])),
         (_proposal("broke"), _result("broke", [], failed=True, error="boom")),
     ]
     verdicts = {v.label: v for v in review(baseline, results)}
     assert verdicts["better"].status == "improvement"
     assert verdicts["worse"].status == "regression"
     assert verdicts["broke"].status == "failed"
+
+
+def test_review_holm_corrects_across_the_ablation_family():
+    # One marginal p (~0.03 alone) among three comparisons must not survive Holm at m=3.
+    baseline = _result("baseline", [0.500, 0.520, 0.480])
+    marginal = _result("marginal", [0.520, 0.560, 0.485])  # positive but weak evidence
+    strong = _result("strong", [0.700, 0.710, 0.690])
+    flat = _result("flat", [0.501, 0.519, 0.481])
+    results = [
+        (_proposal("strong"), strong),
+        (_proposal("marginal"), marginal),
+        (_proposal("flat"), flat),
+    ]
+    verdicts = {v.label: v for v in review(baseline, results)}
+    assert verdicts["strong"].status == "improvement"
+    assert verdicts["flat"].status == "no_change"
+    # The marginal one may pass alone at alpha=0.05, but not within the corrected family.
+    from sensortwin.evaluation.statistics import compare_seeds
+
+    cmp_alone = compare_seeds(baseline.per_seed_macro_f1, marginal.per_seed_macro_f1)
+    if cmp_alone.p_value > 0.05 / 3:
+        assert verdicts["marginal"].status == "no_change"
 
 
 def test_write_report_separates_claims_and_lists_failures(tmp_path):

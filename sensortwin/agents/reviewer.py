@@ -13,13 +13,32 @@ from pathlib import Path
 from typing import Any, Literal
 
 from sensortwin.agents.schemas import ExperimentProposal, ReviewVerdict, RunResult
-from sensortwin.evaluation.statistics import compare_seeds
+from sensortwin.evaluation.statistics import compare_seeds, holm_bonferroni
 
 
 def review(
     baseline: RunResult, results: list[tuple[ExperimentProposal, RunResult]], *, alpha: float = 0.05
 ) -> list[ReviewVerdict]:
-    """One :class:`ReviewVerdict` per proposal, significance-gated against the baseline seeds."""
+    """One :class:`ReviewVerdict` per proposal, significance-gated against the baseline seeds.
+
+    The ablations are a family of comparisons against one baseline, so the per-comparison
+    p-values go through Holm step-down correction before any verdict may claim significance —
+    three shots at α=0.05 is not the same evidence as one.
+    """
+    comparisons = {
+        res.label: compare_seeds(baseline.per_seed_macro_f1, res.per_seed_macro_f1, alpha=alpha)
+        for _prop, res in results
+        if not res.failed
+    }
+    labels = list(comparisons)
+    holm_ok = dict(
+        zip(
+            labels,
+            holm_bonferroni([comparisons[la].p_value for la in labels], alpha=alpha),
+            strict=True,
+        )
+    )
+
     verdicts: list[ReviewVerdict] = []
     for _prop, res in results:
         if res.failed:
@@ -34,28 +53,34 @@ def review(
                 )
             )
             continue
-        cmp = compare_seeds(baseline.per_seed_macro_f1, res.per_seed_macro_f1, alpha=alpha)
+        cmp = comparisons[res.label]
+        significant = cmp.significant and holm_ok[res.label]
         status: Literal["improvement", "no_change", "regression", "failed"]
-        if cmp.significant and cmp.delta > 0:
+        if significant and cmp.delta > 0:
             status = "improvement"
             claim = (
                 f"+{cmp.delta:.3f} macro-F1 (p={cmp.p_value:.3f}, "
-                f"95% CI [{cmp.ci_low:.3f}, {cmp.ci_high:.3f}]) — significant"
+                f"95% CI [{cmp.ci_low:.3f}, {cmp.ci_high:.3f}], Holm-corrected over "
+                f"{len(labels)} ablations) — significant"
             )
-        elif cmp.significant and cmp.delta < 0:
+        elif significant and cmp.delta < 0:
             status = "regression"
-            claim = f"{cmp.delta:.3f} macro-F1 (p={cmp.p_value:.3f}) — significant regression"
+            claim = (
+                f"{cmp.delta:.3f} macro-F1 (p={cmp.p_value:.3f}, Holm-corrected) — "
+                "significant regression"
+            )
         else:
             status = "no_change"
             claim = (
-                f"{cmp.delta:+.3f} macro-F1 (p={cmp.p_value:.3f}) — not significant at α={alpha}"
+                f"{cmp.delta:+.3f} macro-F1 (p={cmp.p_value:.3f}) — not significant at "
+                f"α={alpha} (Holm-corrected over {len(labels)} ablations)"
             )
         verdicts.append(
             ReviewVerdict(
                 label=res.label,
                 delta_vs_base=cmp.delta,
                 p_value=cmp.p_value,
-                significant=cmp.significant,
+                significant=significant,
                 status=status,
                 claim=claim,
             )
