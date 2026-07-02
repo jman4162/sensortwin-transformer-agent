@@ -15,11 +15,41 @@ Source: https://www.nasa.gov/intelligent-systems-division/  (PCoE prognostics da
 from __future__ import annotations
 
 import argparse
+import hashlib
 from collections import Counter
+from pathlib import Path
 
 from sensortwin.data.cmapss import load_cmapss, load_cmapss_subsets
 from sensortwin.utils.config import load_mode_config
 from sensortwin.utils.io import save_dataset
+
+
+def _hash_raw_files(raw_dir: str, subsets: list[str], expected: dict[str, str]) -> dict[str, str]:
+    """SHA-256 every input file for provenance; verify against config-declared hashes if any.
+
+    The raw files are not redistributed, so this repo cannot ship authoritative hashes. Instead,
+    the hash of every input is stamped into the processed dataset's ``.meta.json`` — any result
+    built from it traces back to exact input bytes. After your first download, copy the printed
+    hashes into ``raw_sha256:`` in ``configs/data/cmapss.yaml`` to lock later runs to the same
+    files.
+    """
+    hashes: dict[str, str] = {}
+    for subset in subsets:
+        name = f"train_{subset}.txt"
+        path = Path(raw_dir) / name
+        if not path.exists():
+            continue
+        got = hashlib.sha256(path.read_bytes()).hexdigest()
+        hashes[name] = got
+        want = expected.get(name)
+        if want and got != want:
+            raise SystemExit(
+                f"checksum mismatch for {path}:\n  expected {want}\n  got      {got}\n"
+                "The file differs from the download this repo's config was locked to. "
+                "Re-download it, or update raw_sha256 in configs/data/cmapss.yaml."
+            )
+        print(f"sha256 {name}: {got}" + ("  (verified)" if want else ""))
+    return hashes
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,8 +60,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out", default=None, help="output .npz path (default data/cmapss_<subset>)")
     args = p.parse_args(argv)
 
-    cfg = load_mode_config(args.config, mode=args.mode).get("data", {})
+    full_cfg = load_mode_config(args.config, mode=args.mode)
+    cfg = full_cfg.get("data", {})
     subsets = [s.strip() for s in str(cfg.get("subset", "FD001")).split(",") if s.strip()]
+    raw_hashes = _hash_raw_files(args.raw_dir, subsets, full_cfg.get("raw_sha256") or {})
     kwargs = {
         "channels": cfg.get("channels"),
         "window": cfg.get("window", 48),
@@ -46,6 +78,7 @@ def main(argv: list[str] | None = None) -> None:
     else:
         X, y, meta = load_cmapss_subsets(args.raw_dir, subsets, **kwargs)
 
+    meta["raw_sha256"] = raw_hashes  # provenance: processed data traces to exact input bytes
     out = args.out or f"data/cmapss_{'_'.join(subsets)}"
     path = save_dataset(out, X, y, meta)
 

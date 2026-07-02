@@ -6,6 +6,55 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-02 — fairness audit: training parity, hardened task, honest statistics
+
+**Question.** A principal-level review of the repo asked: do the headline claims survive scrutiny?
+Three did not. (1) The deep baselines trained with plain Adam and no augmentation while the
+transformer got AdamW + weight decay + label smoothing + cosine warmup + augmentation — the
+`configs/models/{cnn,lstm}.yaml` recipes existed but were never read. The +0.056 headline measured
+tuning budget, not architecture. (2) The transformer's channel-dropout augmentation trains it on
+the exact corruption the missing-channel robustness probe applies. (3) Several synthetic classes
+were separable by shortcuts: only one class ever wrote to the vibration channel, `normal` was the
+only class where nothing happened, and `correlated_channel_fault` inflated `voltage_A` variance
+despite claiming to be invisible to single-channel statistics.
+
+**Changes.**
+
+- *Parity:* all deep models now load one shared recipe family from `configs/models/*.yaml`
+  through a single code path; `scripts/tune_baselines.py` gives every model the same
+  lr x capacity grid, selected on validation macro-F1 only. `--no-augment` provides the
+  unaugmented arm so the robustness tables can separate "trained on the probe" from "robust."
+- *Task hardening (generator v2):* benign label-free background activity in every class,
+  load-tracking vibration baseline, a marginal-preserving `correlated_channel_fault` (segment
+  mean/std preserved exactly; only the cross-channel relationship rotates), and a
+  `severity_scale` knob for a low-SNR tier. Signature tests now assert each class's intended
+  statistical fingerprint.
+- *Statistics:* paired t-intervals replace bootstrap CIs (resampling 3 paired differences
+  produces precision that is not there); sample std (ddof=1); paired Cohen's d; an exact
+  sign-test fallback for zero-variance differences (the old code reported p=0.0 as significant);
+  Holm correction over per-class deltas and the agent's ablation family.
+- *Reproducibility:* `scripts/compare_models.py` + `make headline` reproduce the headline table
+  in one command and write committable `headline_comparison.{json,md}` with per-seed values,
+  device, and library versions; `requirements-lock.txt` pins the environment; an end-to-end
+  seed→metric determinism test guards the chain; C-MAPSS inputs are SHA-256-stamped.
+
+**Consequence.** Every number reported before this date was produced by generator v1 under
+asymmetric training and is **superseded**. The 2026-06-23 "+0.056, p=0.006" comparison should be
+read as historical record, not as a current claim. The fair 5-seed re-run at colab_standard is in
+progress; its numbers replace the old headline wherever they land — including if the transformer's
+lead shrinks or disappears, which would itself answer the project's research question honestly.
+
+**Caveats.** The shared recipe is the transformer's spec-default recipe applied to everyone —
+parity by construction, not per-model tuning; `make tune` documents the grid protocol for
+refinement. Early signals from the re-run suggest the parity CNN is stronger than previously
+reported, which was the point of the exercise.
+
+**Next.** Land the 5-seed fair headline (`make headline`), reconcile README / model card to it,
+then re-run calibration, label efficiency (with matched fine-tune budgets), robustness, and
+interpretability at colab_standard.
+
+---
+
 ## 2026-06-25 — colab_standard follow-ups: calibration win, pretraining null
 
 **Question.** (1) Does temperature scaling fix the transformer's overconfidence at scale? (2) Does

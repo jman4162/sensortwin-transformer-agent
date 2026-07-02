@@ -131,3 +131,33 @@ def test_invalid_optimizer_and_scheduler_raise():
     opt = _build_optimizer(model, "adam", 1e-3, 0.0)
     with pytest.raises(ValueError, match="scheduler"):
         _build_scheduler(opt, "step", 0, 10)
+
+
+def test_seed_to_metric_determinism_end_to_end():
+    """Same seed -> identical trained-model metrics on CPU. Guards the whole reproducibility
+    chain (generation, split, standardization, weight init, shuffling, training) so the
+    committed headline numbers stay regenerable rather than only being asserted to be."""
+    from sklearn.metrics import f1_score
+
+    from sensortwin.utils.seeds import set_torch_seed
+
+    def run() -> float:
+        set_torch_seed(3)
+        X, y, _ = generate_dataset(GenConfig(n_samples=120, T=64, seed=3))
+        tr = SensorArrayDataset(X[:80], y[:80]).as_torch()
+        va = SensorArrayDataset(X[80:100], y[80:100]).as_torch()
+        te = SensorArrayDataset(X[100:], y[100:]).as_torch()
+        model = SensorCNN(widths=(8, 16))
+        model, _ = train_model(
+            model,
+            tr,
+            va,
+            epochs=2,
+            batch_size=32,
+            weight=class_weights(y[:80], len(EVENT_CLASSES)),
+            device="cpu",
+        )
+        pred = predict_proba(model, te, device="cpu").argmax(1)
+        return float(f1_score(y[100:], pred, average="macro", zero_division=0))
+
+    assert run() == run()

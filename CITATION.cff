@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this benchmark or code, please cite it as below."
+title: "SensorTwin: a reproducible benchmark for multichannel sensor event classification"
+type: software
+authors:
+  - family-names: Hodge
+    given-names: John
+repository-code: "https://github.com/jman4162/sensortwin-transformer-agent"
+license: MIT
+keywords:
+  - time series
+  - transformer
+  - PatchTST
+  - sensor fault classification
+  - synthetic benchmark
+  - self-supervised pretraining
