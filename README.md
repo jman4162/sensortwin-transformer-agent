@@ -4,12 +4,15 @@ A reproducible, research-style benchmark for **multichannel sensor event classif
 synthetic physics-inspired data, patch-based transformers, self-supervised pretraining,
 robustness/calibration evaluation, and an agentic experiment runner.
 
-> Status: **v0.7 done.** Implemented: the synthetic benchmark (Layer 1); the baseline + evaluation
-> suite (Layer 2); the `SensorPatchTST` patch-transformer + ablations; masked-patch pretraining with
-> a label-efficiency sweep; the robustness / calibration / interpretability study with a
-> [model card](reports/model_card.md); open-dataset validation on NASA C-MAPSS (the same slate on
-> real turbofan sensors, plus a synthetic→real encoder-transfer test); and the constrained agentic
-> experiment runner (Layer 3) with GPU/Colab support. All three layers are in place.
+> Status: **v0.8.** All three layers are in place: the synthetic benchmark (Layer 1); the
+> baseline + evaluation suite (Layer 2); the `SensorPatchTST` patch-transformer + ablations;
+> masked-patch pretraining with a label-efficiency sweep; the robustness / calibration /
+> interpretability study with a [model card](reports/model_card.md); open-dataset validation on
+> NASA C-MAPSS; and the constrained agentic experiment runner (Layer 3). v0.8 re-ran the headline
+> under strict **training parity** (every deep model gets the identical recipe) on a **hardened
+> generator** (no shortcut channels), with paired statistics over 5 seeds — see the
+> [paper-style report](reports/paper_style_report.md) and
+> [research log](reports/research_log.md).
 
 ## Why this matters
 
@@ -32,15 +35,15 @@ The headline finding and the dataset, in two pictures (regenerate with `python -
 | The benchmark | The result |
 | --- | --- |
 | ![Dataset gallery](docs/figures/dataset_gallery.png) | ![Macro-F1 vs scale](docs/figures/scale_comparison.png) |
-| One example per event class (event region shaded, affected channels in blue). | Macro-F1 vs training size: the transformer is **last at 2k, first at 20k** — its inductive bias pays off only at scale. |
+| One example per event class (event region shaded, affected channels in blue). | Macro-F1 vs training size, all models on one shared recipe: the transformer **ties the feature baseline at 2k** and **wins decisively at 20k** (+0.09 over the CNN, p=0.001, 5 seeds). |
 
-At `colab_standard` the transformer beats the best baseline on **every** class, most on the hard
-cross-channel ones; integrated-gradients saliency tracks (imperfectly) the injected event:
+Where the 20k gain lives (per-class deltas vs the strongest baseline, Holm-corrected), and a
+saliency check against the generator's ground truth:
 
 | Per-class gain | Saliency vs truth |
 | --- | --- |
 | ![Per-class delta](docs/figures/perclass_delta.png) | ![Saliency overlay](docs/figures/saliency_overlay.png) |
-| Transformer − best-baseline F1 per class (all positive). | Integrated-gradients attribution vs the true event span (quick-scale illustration; attention ≠ explanation, see the model card). |
+| Transformer − CNN F1 per class at 20k. The largest gains are the structure/cross-channel classes (`sensor_dropout` +0.35, `correlated_channel_fault` +0.20); trend classes show none. | Integrated-gradients attribution vs the true event span (quick-scale illustration; attention ≠ explanation, see the model card). |
 
 ## Quickstart
 
@@ -51,7 +54,13 @@ pip install -e ".[dev]"          # core + test tooling; add ".[ml]" for the mode
 make test                        # run the suite
 make data                        # generate the quick-demo dataset to data/synth_quick_demo.npz
 make baselines                   # train + evaluate baselines (needs ".[ml]"), writes the report
+make headline-quick              # wiring-grade version of the headline comparison (CPU, minutes)
+make headline                    # the real headline: 6 models x 5 seeds at 20k (GPU/MPS, hours)
 ```
+
+New here? Read the [tutorial guide](docs/tutorial_guide.md); terms are defined in the
+[glossary](docs/glossary.md). The full write-up is the
+[paper-style report](reports/paper_style_report.md).
 
 Train and evaluate the baselines directly (requires the `ml` extra — `pip install -e ".[ml]"`):
 
@@ -94,48 +103,60 @@ Run modes (spec §19): `quick_demo` (2k), `colab_standard` (20k), `full_reproduc
 
 ## Results
 
-At `colab_standard` scale (20,000 samples, leakage-safe 70/15/15 split, test set), over **3 seeds**
-(mean ± std), produced by [`notebooks/04_colab_standard_comparison.ipynb`](notebooks/04_colab_standard_comparison.ipynb)
-on a T4 GPU:
+Both tables come from one committed command (`make headline` →
+`python -m scripts.compare_models`), which regenerates the data, resplits, and retrains every
+model per seed. **All deep models share one training recipe** (AdamW, weight decay, label
+smoothing, cosine warmup, identical augmentation, read from `configs/models/*.yaml`), so the
+comparison measures architecture rather than tuning budget. Every number below traces to
+[`reports/experiment_summaries/headline_comparison.json`](reports/experiment_summaries/headline_comparison.json),
+which records the per-seed values, device, and library versions.
 
-| Model | Macro-F1 | Macro-AUROC | ECE |
+At `colab_standard` (20,000 samples, leakage-safe 70/15/15 split, test set, **5 seeds**,
+mean ± sample std):
+
+| Model | Macro-F1 | ECE | Params |
 | --- | ---: | ---: | ---: |
-| **transformer** | **0.900 ± 0.003** | 0.990 ± 0.000 | 0.095 ± 0.006 |
-| cnn | 0.844 ± 0.004 | 0.983 ± 0.001 | 0.023 ± 0.002 |
-| xgboost | 0.759 ± 0.004 | 0.967 ± 0.000 | 0.042 ± 0.004 |
-| logreg | 0.697 ± 0.006 | 0.950 ± 0.001 | 0.019 ± 0.003 |
-| random_forest | 0.691 ± 0.003 | 0.950 ± 0.000 | 0.185 ± 0.003 |
-| lstm | 0.545 ± 0.022 | 0.902 ± 0.008 | 0.056 ± 0.009 |
+| **transformer** | **0.861 ± 0.010** | 0.087 | 815k |
+| cnn | 0.774 ± 0.010 | 0.135 | 54k |
+| xgboost | 0.704 ± 0.003 | 0.055 | — |
+| logreg | 0.649 ± 0.006 | 0.018 | — |
+| random_forest | 0.641 ± 0.004 | 0.144 | — |
+| lstm | 0.507 ± 0.023 | 0.105 | 39k |
 
-At 20k the ordering **flips** relative to small scale: the deep models overtake feature+GBM, and
-`SensorPatchTST` tops the strongest baseline (cnn) by **+0.056 macro-F1 (95% CI [0.048, 0.061],
-p=0.006**, paired over seeds — `evaluation/statistics.py`). The transformer's gains land on the
-hard, cross-channel / long-context classes its inductive bias targets: vs the cnn it gains
-`sensor_dropout` +0.135, `regime_shift` +0.120, `normal` +0.092. One honest trade-off: the
-transformer is the **most accurate but least calibrated** model here (ECE 0.095 vs cnn 0.023) — a
-single temperature fit on validation (T≈0.62, `evaluation/calibration.py`) cuts its ECE to ≈0.017
-with macro-F1 unchanged. This is the result a
-*controllable* benchmark is built to surface: the transformer's inductive bias pays off at scale,
-not at the small-data scale below.
+`SensorPatchTST` tops the strongest baseline (the CNN, trained with the identical recipe) by
+**+0.09 macro-F1** (95% t-interval [+0.06, +0.11], paired p = 0.001 over 5 seeds,
+`evaluation/statistics.py`). Six of ten per-class deltas survive Holm correction, and the two
+largest are the classes designed to need temporal structure and cross-channel reasoning:
+`sensor_dropout` **+0.35** and `correlated_channel_fault` **+0.20** — the latter is
+marginal-preserving by construction, so no single-channel statistic can detect it.
 
-### Small-scale contrast (quick-demo, 2k — wiring-grade)
+The trend classes show no advantage (`slow_degradation` +0.00, `thermal_drift` +0.01, both
+n.s.): features and convolutions already capture monotone drifts. One honest trade-off: the transformer
+is the most accurate and among the worst calibrated (ECE 0.087 vs logreg 0.018); a single
+temperature fit on validation (`evaluation/calibration.py`) corrects this without changing any
+prediction (see the [model card](reports/model_card.md)).
 
-The same slate at 2k (`make baselines` / `make transformer`) shows the opposite ranking, because the
-deep models are data-starved:
+### Small-scale contrast (2k, same protocol, 5 seeds)
 
-| Model | Macro-F1 | Macro-AUROC | ECE | Params |
-| --- | ---: | ---: | ---: | ---: |
-| **xgboost** | **0.620** | 0.920 | 0.114 | — |
-| logreg | 0.571 | 0.898 | 0.122 | — |
-| random_forest | 0.543 | 0.915 | 0.181 | — |
-| cnn | 0.504 | 0.887 | 0.082 | 54k |
-| transformer | 0.435 | 0.859 | 0.143 | 814k |
-| lstm | 0.338 | 0.817 | 0.063 | 39k |
+| Model | Macro-F1 | ECE |
+| --- | ---: | ---: |
+| transformer | 0.629 ± 0.032 | 0.077 |
+| xgboost | 0.603 ± 0.024 | 0.125 |
+| cnn | 0.582 ± 0.028 | 0.142 |
+| random_forest | 0.555 ± 0.034 | 0.151 |
+| logreg | 0.544 ± 0.028 | 0.140 |
+| lstm | 0.384 ± 0.034 | 0.092 |
 
-At 2k the **feature + gradient-boosting baseline (xgboost) leads** and the 814k-param transformer
-trails — the most data-hungry model, far below the scale where its inductive bias pays off. The
-contrast between the two tables is the benchmark's whole point. The §17 ablations (patch size,
-channel embedding, pooling) run via `make ablate`.
+At 2k the transformer and the feature+GBM baseline are a **statistical tie** (Δ = +0.03,
+95% t-interval [−0.02, +0.07], p = 0.16) — and the per-class picture inverts: at 2k the
+transformer *loses* `regime_shift` by −0.37 (Holm-significant), the same class it wins by +0.10
+at 20k. That sign flip with scale is the benchmark's point: the architecture's advantage on
+structural classes exists, and it costs data.
+
+An earlier version of this README reported the transformer far behind at 2k (0.435); that
+number came from training the baselines without the transformer's recipe and is superseded (see
+the research log entry of 2026-07-02). The §17 ablations (patch size, channel embedding,
+pooling) run via `make ablate`.
 
 ## Real-data validation (v0.6)
 
@@ -191,9 +212,10 @@ CPU the path is unchanged and bit-identical, so tests stay deterministic. Pass `
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jman4162/sensortwin-transformer-agent/blob/master/notebooks/04_colab_standard_comparison.ipynb)
 &nbsp;[`notebooks/04_colab_standard_comparison.ipynb`](notebooks/04_colab_standard_comparison.ipynb)
-runs the full model slate at `colab_standard` over several seeds, aggregates to mean ± std, and
-significance-tests the transformer against the strongest baseline — the apples-to-apples comparison
-behind the Results section. It writes a downloadable `summary.md`/`summary.json`.
+runs `scripts/compare_models` (the same command as `make headline`) at `colab_standard` over 5
+seeds: mean ± std per model, a paired t-interval/t-test for transformer-vs-best-baseline, and
+Holm-corrected per-class deltas. It writes the committable
+`headline_comparison.{md,json}` behind the Results section.
 
 ## Project principles
 
@@ -213,8 +235,10 @@ behind the Results section. It writes a downloadable `summary.md`/`summary.json`
 | v0.3 | `SensorPatchTST` classifier + ablations | **done** |
 | v0.4 | Masked-patch pretraining, label-efficiency | **done** |
 | v0.5 | Robustness, calibration, interpretability + model card | **done** |
-| v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **done** |
+| v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **wired, CI-tested on a fixture; not yet run on the real download** |
 | v0.7 | Agentic experiment runner + Colab GPU readiness | **done** |
+| v0.8 | Fairness overhaul: training parity, hardened generator, paired statistics, 5-seed re-run | **done** |
+| next | Matched-budget label-efficiency + robustness re-runs at 20k; C-MAPSS studies on the real download | open |
 
 ## License
 

@@ -6,6 +6,52 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-02 — the fair headline: parity + hardened task, 5 seeds, both scales
+
+**Question.** With every deep model on the identical recipe and the shortcut channels closed
+(generator v2), does the transformer still beat the baselines — and does the "loses at 2k, wins
+at 20k" scale story survive?
+
+**Setup.** `make headline` (`scripts/compare_models.py`): 6 models × 5 seeds (0–4) at
+`colab_standard` (20k) and the same protocol at 2k. Per seed: regenerate, resplit, retrain.
+30 epochs, shared recipe from `configs/models/*.yaml`. Apple M3 Max, torch 2.12.1
+(20k on MPS, 2k on CPU), FP32. Artifacts:
+`reports/experiment_summaries/headline_comparison.json` and `scale_2k/headline_comparison.json`.
+
+**Result — 20k (test macro-F1, mean ± sample std).** transformer **0.861 ± 0.010** >
+cnn 0.774 ± 0.010 > xgboost 0.704 ± 0.003 > logreg 0.649 ± 0.006 > random_forest 0.641 ± 0.004 >
+lstm 0.507 ± 0.023. Transformer vs cnn: **Δ = +0.09, 95% t-interval [+0.06, +0.11], paired
+p = 0.001, Cohen's d = 4.6**. Holm-surviving per-class gains: `sensor_dropout` +0.35,
+`correlated_channel_fault` +0.20, `regime_shift` +0.10, `voltage_sag` +0.06, `compound_fault`
++0.04, `current_spike` +0.02. No gain on the trend classes (`slow_degradation` +0.00,
+`thermal_drift` +0.01, n.s.).
+
+**Result — 2k (same protocol).** transformer 0.629 ± 0.032 ≈ xgboost 0.603 ± 0.024 (Δ = +0.03,
+CI [−0.02, +0.07], p = 0.16: a tie) > cnn 0.582 > random_forest 0.555 > logreg 0.544 >
+lstm 0.384. Per class the transformer *loses* `regime_shift` −0.37 (Holm-significant) and wins
+`compound_fault` +0.27, `thermal_drift` +0.09.
+
+**Interpretation.** Three findings, all cleaner than the superseded v1 numbers:
+(1) The parity fix strengthened, not weakened, the headline — +0.09 vs the old +0.056 — while
+the hardened task lowered everyone's absolute scores (the old 0.900 was partly shortcut
+learning). (2) The old "transformer last at 2k (0.435)" result was a training-budget artifact;
+under parity it ties for first at 2k. What data actually buys is the structural classes: the
+`regime_shift` delta flips sign from −0.37 to +0.10 between 2k and 20k. (3) The gains
+concentrate exactly where the architecture's inductive bias predicts — the marginal-preserving
+cross-channel fault (+0.20) is now detectable only through channel relationships, and the
+transformer is the model that exploits them.
+
+**Caveats.** Synthetic only; one shared recipe (designed around the transformer — the shared
+lr × capacity grid in `make tune` exists to bound this and has not yet been run at scale);
+n = 5 seeds; MPS/CPU FP32, not the T4 path. Calibration trade-off persists (transformer ECE
+0.087; temperature-scaling re-measurement at generator v2 in progress).
+
+**Next.** Fill the calibration re-measurement into the model card; matched-budget
+label-efficiency re-run (`ARM_LRS` selection now removes the fine-tune confound); robustness
+with and without the `--no-augment` arm; `make tune` at colab_standard.
+
+---
+
 ## 2026-07-02 — fairness audit: training parity, hardened task, honest statistics
 
 **Question.** A principal-level review of the repo asked: do the headline claims survive scrutiny?
@@ -22,7 +68,7 @@ despite claiming to be invisible to single-channel statistics.
 
 - *Parity:* all deep models now load one shared recipe family from `configs/models/*.yaml`
   through a single code path; `scripts/tune_baselines.py` gives every model the same
-  lr x capacity grid, selected on validation macro-F1 only. `--no-augment` provides the
+  lr x capacity grid, selected on validation macro-F1 only. `--no-augment` adds the
   unaugmented arm so the robustness tables can separate "trained on the probe" from "robust."
 - *Task hardening (generator v2):* benign label-free background activity in every class,
   load-tracking vibration baseline, a marginal-preserving `correlated_channel_fault` (segment

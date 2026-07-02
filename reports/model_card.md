@@ -55,8 +55,10 @@ US-government work and are not redistributed here; run the studies after downloa
 ## 7. Metrics
 Headline metric is **macro-F1** (classes are imbalanced); also report weighted-F1, per-class
 precision/recall, one-vs-rest AUROC, and the confusion matrix. Calibration via ECE, multiclass
-Brier, and reliability diagrams. Quick-demo numbers are sanity figures only; the research-grade
-`colab_standard` comparison (3 seeds) runs via `notebooks/04_colab_standard_comparison.ipynb`.
+Brier, and reliability diagrams. The research-grade comparison is `make headline`
+(`scripts/compare_models.py`: 6 models × 5 seeds at `colab_standard`, shared training recipe,
+paired t-statistics, Holm-corrected per-class deltas), whose committed artifact
+`reports/experiment_summaries/headline_comparison.json` backs every number quoted here.
 Reproduce the smaller runs with `make baselines` / `make transformer` / `make robustness-study`;
 real-data studies with `make real-data` / `make sim2real` (after the C-MAPSS download).
 
@@ -70,17 +72,21 @@ on data scale and is not claimed beyond the synthetic benchmark.
 ECE / Brier / reliability are reported on clean and shifted test sets. Post-hoc **temperature
 scaling** (one parameter fit on validation) is provided; as is standard, models tend to be more
 overconfident under distribution shift, and temperature scaling reduces ECE without changing
-accuracy. Accuracy and calibration rankings differ: at `colab_standard` the transformer is the most
-accurate but the least calibrated (ECE ≈0.095 vs the CNN's ≈0.023). A single temperature fit on the
-validation logits (T≈0.62) cuts its test ECE to ≈0.017 with macro-F1 unchanged — most accurate **and**
-well-calibrated after a one-parameter fit.
+accuracy. Accuracy and calibration rankings differ: in the 5-seed headline run the two most
+accurate models are also the worst-calibrated supervised ones (transformer ECE 0.087, CNN 0.135)
+while logistic regression is nearly calibrated out of the box (0.018). An earlier
+single-seed run (generator v1) showed a single temperature fit cutting the transformer's ECE
+from ≈0.09 to ≈0.017 with predictions unchanged; the generator-v2 re-measurement is
+**[pending — 3-seed run in progress]**.
 
 ## 10. Known failure modes
-- The transformer is **data-hungry**: at quick-demo scale (~1.4k train) it is last (macro-F1 0.435,
-  behind XGBoost-on-features and the CNN). At `colab_standard` (20k, 3 seeds) the ranking flips — it
-  leads at 0.900 ± 0.003 and beats the strongest baseline (CNN, 0.844) by +0.056 macro-F1 (p=0.006).
-  So the inductive bias pays off at scale, not below it; the win lands on the hard cross-channel
-  classes (`sensor_dropout`, `regime_shift`, `normal`).
+- The transformer's data-hunger shows **per class, not in the headline mean**: at 2k (5 seeds,
+  shared recipe) it statistically ties XGBoost-on-features overall but *loses* `regime_shift` by
+  −0.37 (Holm-significant); at 20k it beats the strongest baseline (CNN, identical recipe) by
+  +0.09 macro-F1 (p=0.001) and the same class flips to +0.10. Its largest 20k wins are the
+  structure/cross-channel classes (`sensor_dropout` +0.35, `correlated_channel_fault` +0.20).
+  An earlier claim that it was far behind at 2k (0.435) came from baselines trained without its
+  recipe and is superseded (research log, 2026-07-02).
 - Masked-pretraining **did not improve label efficiency** at `colab_standard` (1 seed, reduced
   budget): pretrained-then-fine-tuned trailed from-scratch at every label fraction and the frozen
   linear probe was near-useless. This is confounded by a lower fine-tune learning rate / short
@@ -100,6 +106,11 @@ generator's known event regions.
 
 ## 12. Reproducibility
 Deterministic from a seed end to end (`set_torch_seed`, leakage-safe splits, train-only
-standardization). Quality gates (`make check`: ruff + mypy + pytest) run in CI on Python 3.10/3.12.
-Install with `pip install -e ".[ml,dev]"`; regenerate any study with its `make` target. The private
-design spec and the run-generated study reports are gitignored; this card and the code are committed.
+standardization, and an end-to-end seed→metric regression test). Quality gates (`make check`:
+ruff + mypy + pytest) run in CI on Python 3.10/3.12. Install with `pip install -e ".[ml,dev]"`;
+`requirements-lock.txt` pins the exact environment behind the committed numbers; regenerate any
+study with its `make` target. The headline artifacts
+(`headline_comparison.{json,md}`, with per-seed values, device, and library versions) are
+committed alongside this card; the private design spec and the wiring-grade per-run reports are
+gitignored. Datasets carry a generator version; results are comparable only within one version
+(current: v2).
