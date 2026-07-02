@@ -4,7 +4,19 @@
 
 T: 512
 seed: 0
-normalize: true
+# Whole-dataset z-scoring leaks test statistics into any downstream split; fit a
+# ChannelStandardizer on the train split instead.
+normalize: false
+
+# 1.0 is the standard tier. Lower it (e.g. 0.5) to shrink event severities toward the noise
+# floor for the low-SNR tier of the robustness studies.
+severity_scale: 1.0
+
+# Mild label-free background events in every class (including `normal`), so channel activity
+# alone is not class evidence. rate: 0 disables.
+benign_activity:
+  rate: 1.0
+  max_events: 2
 
 artifacts:
   gaussian_sigma: 0.02

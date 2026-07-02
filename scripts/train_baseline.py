@@ -122,43 +122,62 @@ def _run_classical(
     return metrics
 
 
-def _build_deep_model(name: str) -> tuple[Any, dict[str, Any]]:
+DEEP_CONFIGS = {
+    "cnn": "configs/models/cnn.yaml",
+    "lstm": "configs/models/lstm.yaml",
+    "transformer": "configs/models/sensorpatchtst.yaml",
+}
+
+
+def _deep_model_class(name: str) -> type:
+    if name == "cnn":
+        from sensortwin.models.cnn import SensorCNN
+
+        return SensorCNN
+    if name == "lstm":
+        from sensortwin.models.lstm import SensorLSTM
+
+        return SensorLSTM
+    from sensortwin.models.transformer import SensorPatchTST
+
+    return SensorPatchTST
+
+
+def _build_deep_model(name: str, *, use_augment: bool = True) -> tuple[Any, dict[str, Any]]:
     """Return ``(model, train_kwargs)`` for a deep model.
 
-    CNN/LSTM use their constructor defaults and the plain training loop. The transformer reads its
-    architecture and training recipe (AdamW / label smoothing / cosine-warmup / augmentation) from
-    ``configs/models/sensorpatchtst.yaml``.
+    Every deep model reads its architecture and training recipe from ``configs/models/*.yaml``
+    through this one code path, and the committed configs share a single recipe family
+    (AdamW / weight decay / label smoothing / cosine-warmup / identical augmentation stack) —
+    so cross-model comparisons measure architecture, not training budget.
+
+    ``use_augment=False`` strips train-time augmentation: the no-augmentation arm for robustness
+    studies, where ``channel_dropout`` augmentation would otherwise train every model on the same
+    corruption the missing-channel sweep probes.
     """
-    from sensortwin.models.cnn import SensorCNN
-    from sensortwin.models.lstm import SensorLSTM
+    from sensortwin.training.augment import build_augment
 
-    if name == "cnn":
-        return SensorCNN(), {}
-    if name == "lstm":
-        return SensorLSTM(), {}
-    if name == "transformer":
-        from sensortwin.models.transformer import SensorPatchTST
-        from sensortwin.training.augment import build_augment
-
-        cfg = load_yaml("configs/models/sensorpatchtst.yaml")
-        model = SensorPatchTST(**cfg.get("model", {}))
-        tcfg = dict(cfg.get("train", {}))
-        keys = (
-            "optimizer",
-            "lr",
-            "weight_decay",
-            "label_smoothing",
-            "scheduler",
-            "warmup_epochs",
-            "batch_size",
-            "patience",
-        )
-        train_kwargs: dict[str, Any] = {k: tcfg[k] for k in keys if k in tcfg}
+    if name not in DEEP_CONFIGS:
+        raise SystemExit(f"unknown deep model '{name}'")
+    cfg = load_yaml(DEEP_CONFIGS[name])
+    model = _deep_model_class(name)(**cfg.get("model", {}))
+    tcfg = dict(cfg.get("train", {}))
+    keys = (
+        "optimizer",
+        "lr",
+        "weight_decay",
+        "label_smoothing",
+        "scheduler",
+        "warmup_epochs",
+        "batch_size",
+        "patience",
+    )
+    train_kwargs: dict[str, Any] = {k: tcfg[k] for k in keys if k in tcfg}
+    if use_augment:
         augment = build_augment(tcfg.get("augment"))
         if augment is not None:
             train_kwargs["augment"] = augment
-        return model, train_kwargs
-    raise SystemExit(f"unknown deep model '{name}'")
+    return model, train_kwargs
 
 
 def _run_deep(
@@ -175,12 +194,13 @@ def _run_deep(
     out_dir,
     device=None,
     amp=None,
+    use_augment=True,
 ) -> dict[str, Any]:
     import torch
 
     from sensortwin.training.loop import class_weights, predict_proba, train_model
 
-    model, train_kwargs = _build_deep_model(name)
+    model, train_kwargs = _build_deep_model(name, use_augment=use_augment)
     n_params = sum(p.numel() for p in model.parameters())
     train_ds = SensorArrayDataset(Xtr_std, ytr).as_torch()
     val_ds = SensorArrayDataset(Xva_std, yva).as_torch()
@@ -213,7 +233,11 @@ def _run_deep(
 
 
 def _write_report(
-    results: dict[str, dict], anomaly: dict | None, out_dir: Path, cfg: GenConfig
+    results: dict[str, dict],
+    anomaly: dict | None,
+    out_dir: Path,
+    cfg: GenConfig,
+    augmented: bool = True,
 ) -> Path:
     """Assemble the markdown results report (spec §16 deliverable, §18 table, §7 model-zoo)."""
     lines = [
@@ -278,9 +302,27 @@ def _write_report(
         "",
         "- Feature baselines use an sklearn `StandardScaler` fit on train only; CNN/LSTM use a "
         "`ChannelStandardizer` fit on train only — no test statistics leak into training.",
-        "- These are quick-mode numbers for wiring/verification; run `--mode colab_standard` for "
-        "research-grade results before drawing conclusions.",
+        "- All deep models share one training recipe family (AdamW, weight decay, label "
+        "smoothing, cosine-warmup, identical augmentation) read from `configs/models/*.yaml`, "
+        "so deep-model comparisons hold the training budget fixed. Classical baselines fit "
+        "engineered features on clean signals; augmentation does not apply to them.",
     ]
+    if augmented:
+        lines.append(
+            "- Deep models trained **with** the shared augmentation, which includes channel "
+            "dropout — the same corruption the missing-channel sweep probes. The Missing-ch Δ "
+            "column is comparable across deep models but flatters all of them; rerun with "
+            "`--no-augment` for the unaugmented arm."
+        )
+    else:
+        lines.append(
+            "- Deep models trained **without** augmentation (`--no-augment`): the "
+            "no-augmentation arm for robustness studies."
+        )
+    lines.append(
+        "- These are quick-mode numbers for wiring/verification; run `--mode colab_standard` "
+        "for research-grade results before drawing conclusions."
+    )
     out = out_dir / "baseline_results.md"
     out.write_text("\n".join(lines) + "\n")
     return out
@@ -312,6 +354,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
     p.add_argument(
         "--no-amp", action="store_true", help="force FP32 (default: AMP auto-on when CUDA)"
+    )
+    p.add_argument(
+        "--no-augment",
+        action="store_true",
+        help="train deep models without augmentation (the no-augmentation arm for "
+        "robustness studies; default recipes include channel dropout, which overlaps "
+        "with the missing-channel probe)",
     )
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
@@ -365,13 +414,14 @@ def main(argv: list[str] | None = None) -> None:
                 out_dir,
                 args.device,
                 amp,
+                not args.no_augment,
             )
         else:
             raise SystemExit(f"unknown model '{name}'")
         print(f"  macro-F1={results[name]['macro_f1']:.3f}")
 
     anomaly = None if args.no_anomaly else _run_anomaly(F_train, y[tr], F_test, y[te])
-    report = _write_report(results, anomaly, out_dir, cfg)
+    report = _write_report(results, anomaly, out_dir, cfg, augmented=not args.no_augment)
     print(f"\nReport written to {report}")
 
 

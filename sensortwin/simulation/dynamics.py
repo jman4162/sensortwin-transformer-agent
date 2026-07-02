@@ -75,10 +75,63 @@ def base_channels(T: int, rng: np.random.Generator) -> np.ndarray:
     temp_core = first_order_lag(0.5 * heating + 0.3 * ambient, alpha=0.02)
     temp_surface = first_order_lag(temp_core, alpha=0.01)  # surface lags core
 
-    # Vibration proxy: low-level broadband content, baseline-stable until instability events.
-    vibration = 0.05 * rng.standard_normal(T)
+    # Vibration proxy: broadband content whose level tracks the operating load, so the channel
+    # carries benign energy in every class (energy there is not, by itself, class evidence).
+    vibration = (0.04 + 0.02 * np.clip(load - 1.0, 0.0, None)) * rng.standard_normal(T)
 
     X = np.stack(
         [voltage_a, voltage_b, current_a, current_b, temp_core, temp_surface, vibration, ambient]
     )
     return X.astype(np.float64)
+
+
+def _hann(duration: int) -> np.ndarray:
+    return 0.5 - 0.5 * np.cos(2 * np.pi * np.arange(duration) / max(duration - 1, 1))
+
+
+def benign_activity(
+    X: np.ndarray, rng: np.random.Generator, *, rate: float = 1.0, max_events: int = 2
+) -> None:
+    """Inject mild, label-free background activity (in place) before event injection.
+
+    Every class — including ``normal`` — receives on average ``rate`` benign events, so
+    "some channel moved" is not class evidence and ``normal`` is not simply the class where
+    nothing happens. The shapes are deliberately distinguishable from true events:
+
+      * smooth Hann bump on a random channel — smaller and smoother than spikes/sags;
+      * constant-amplitude vibration burst — no exponential growth, no current bleed
+        (``oscillatory_instability`` has both);
+      * small step that reverts — ``regime_shift`` is larger, multi-channel, and persists.
+
+    Amplitudes sit between the measurement-noise floor (~0.02) and true event severities
+    (>= 0.2 at ``severity_scale=1``), which hardens the task without making classes ambiguous.
+    """
+    if max_events <= 0 or rate <= 0:
+        return
+    T = X.shape[1]
+    C = X.shape[0]
+    p = min(rate / max_events, 1.0)
+    for _ in range(max_events):
+        if rng.random() >= p:
+            continue
+        kind = int(rng.integers(0, 3))
+        if kind == 0:  # smooth bump
+            duration = int(rng.uniform(0.05, 0.15) * T)
+            start = int(rng.integers(0, max(T - duration, 1)))
+            c = int(rng.integers(0, C))
+            amp = rng.uniform(0.08, 0.2) * (1 if rng.random() < 0.5 else -1)
+            X[c, start : start + duration] += amp * _hann(duration)
+        elif kind == 1:  # constant-amplitude vibration burst
+            duration = int(rng.uniform(0.05, 0.2) * T)
+            start = int(rng.integers(0, max(T - duration, 1)))
+            amp = rng.uniform(0.05, 0.15)
+            freq = rng.uniform(0.05, 0.45)
+            burst = amp * np.sin(2 * np.pi * freq * np.arange(duration))
+            X[6, start : start + duration] += burst * _hann(duration)  # 6 = vibration_proxy
+        else:  # small step that reverts
+            duration = int(rng.uniform(0.1, 0.3) * T)
+            start = int(rng.integers(0, max(T - duration, 1)))
+            c = int(rng.integers(0, C))
+            X[c, start : start + duration] += rng.uniform(0.05, 0.15) * (
+                1 if rng.random() < 0.5 else -1
+            )

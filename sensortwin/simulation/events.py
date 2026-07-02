@@ -6,6 +6,10 @@ channels). The classes span a deliberate difficulty gradient: some are detectabl
 single-channel features (``current_spike``), others require long-range context
 (``slow_degradation``) or cross-channel reasoning (``correlated_channel_fault``). This is what
 makes the benchmark discriminate between model inductive biases rather than rewarding any one.
+
+Every injector accepts a ``scale`` factor that multiplies the sampled severity
+(``GenConfig.severity_scale``): ``scale < 1`` shrinks events toward the noise floor for the
+low-SNR tier of the benchmark without changing any event's shape.
 """
 
 from __future__ import annotations
@@ -87,17 +91,17 @@ def _ramp(duration: int) -> np.ndarray:
 
 
 # --- Injectors -------------------------------------------------------------------------------
-# Each takes (X, rng) where X is [C, T] (mutated in place) and returns EventMeta.
+# Each takes (X, rng, scale) where X is [C, T] (mutated in place) and returns EventMeta.
 
 
-def inject_normal(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_normal(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     return EventMeta(EventClass.normal, "normal")
 
 
-def inject_thermal_drift(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_thermal_drift(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     T = X.shape[1]
     start, duration = _window(T, rng, 0.4, 0.9)
-    sev = rng.uniform(0.5, 2.0)
+    sev = scale * rng.uniform(0.5, 2.0)
     ramp = _ramp(duration) * sev
     X[TEMPERATURE[0], start : start + duration] += ramp
     X[TEMPERATURE[1], start : start + duration] += 0.6 * ramp  # surface follows core, attenuated
@@ -106,28 +110,28 @@ def inject_thermal_drift(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
     )
 
 
-def inject_voltage_sag(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_voltage_sag(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     T = X.shape[1]
     start, duration = _window(T, rng, 0.05, 0.25)
-    sev = rng.uniform(0.2, 0.6)
+    sev = scale * rng.uniform(0.2, 0.6)
     ch = list(VOLTAGE) if rng.random() < 0.5 else [rng.choice(VOLTAGE)]
     for c in ch:
         X[c, start : start + duration] -= sev
     return EventMeta(EventClass.voltage_sag, "voltage_sag", start, duration, sev, ch)
 
 
-def inject_current_spike(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_current_spike(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     T = X.shape[1]
     start = int(rng.integers(0, T - 1))
     duration = int(rng.integers(2, max(3, int(0.03 * T))))
-    sev = rng.uniform(1.0, 3.0)
+    sev = scale * rng.uniform(1.0, 3.0)
     c = int(rng.choice(CURRENT))
     end = min(start + duration, T)
     X[c, start:end] += sev
     return EventMeta(EventClass.current_spike, "current_spike", start, duration, sev, [c])
 
 
-def inject_sensor_dropout(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_sensor_dropout(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     T = X.shape[1]
     start, duration = _window(T, rng, 0.1, 0.4)
     c = int(rng.integers(0, N_CHANNELS))
@@ -136,10 +140,12 @@ def inject_sensor_dropout(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
     return EventMeta(EventClass.sensor_dropout, "sensor_dropout", start, duration, 1.0, [c])
 
 
-def inject_oscillatory_instability(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_oscillatory_instability(
+    X: np.ndarray, rng: np.random.Generator, scale: float = 1.0
+) -> EventMeta:
     T = X.shape[1]
     start, duration = _window(T, rng, 0.2, 0.6)
-    sev = rng.uniform(0.3, 1.0)
+    sev = scale * rng.uniform(0.3, 1.0)
     freq = rng.uniform(0.1, 0.4)  # cycles per sample
     growth = np.exp(np.linspace(0, rng.uniform(0.5, 2.0), duration))  # growing amplitude
     osc = sev * growth * np.sin(2 * np.pi * freq * np.arange(duration))
@@ -156,19 +162,28 @@ def inject_oscillatory_instability(X: np.ndarray, rng: np.random.Generator) -> E
     )
 
 
-def inject_correlated_channel_fault(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
-    """Break the normal voltage<->current anti-correlation without changing marginals much.
+def inject_correlated_channel_fault(
+    X: np.ndarray, rng: np.random.Generator, scale: float = 1.0
+) -> EventMeta:
+    """Break the normal voltage<->current anti-correlation without changing marginals.
 
     Detectable only through the cross-channel *relationship*: a single-channel view looks normal.
+    The affected voltage segment is rotated toward the current channel's fluctuation, then
+    rescaled so its mean and variance match the original segment exactly — a per-channel
+    statistic (std, range, spectral energy) cannot separate this class.
     """
     T = X.shape[1]
     start, duration = _window(T, rng, 0.2, 0.6)
-    sev = rng.uniform(0.3, 0.8)
+    sev = min(scale * rng.uniform(0.3, 0.8), 1.0)  # mixing weight, capped at full rotation
     seg = slice(start, start + duration)
-    # Inject shared fluctuation into voltage matching (not opposing) current — flips the sign of
-    # the local correlation relative to the rest of the window.
-    shared = sev * (X[CURRENT[0], seg] - X[CURRENT[0], seg].mean())
-    X[VOLTAGE[0], seg] += 2.0 * shared
+    v = X[VOLTAGE[0], seg]
+    v_mean, v_std = v.mean(), v.std()
+    i_c = X[CURRENT[0], seg] - X[CURRENT[0], seg].mean()
+    i_unit = i_c / (i_c.std() + 1e-9)
+    # Mix the voltage fluctuation with a component tracking (not opposing) current, then restore
+    # the segment's original mean/std so marginals are unchanged.
+    mixed = np.sqrt(max(1.0 - sev**2, 0.0)) * (v - v_mean) + sev * v_std * i_unit
+    X[VOLTAGE[0], seg] = v_mean + mixed * (v_std / (mixed.std() + 1e-9))
     return EventMeta(
         EventClass.correlated_channel_fault,
         "correlated_channel_fault",
@@ -179,10 +194,10 @@ def inject_correlated_channel_fault(X: np.ndarray, rng: np.random.Generator) -> 
     )
 
 
-def inject_regime_shift(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_regime_shift(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     T = X.shape[1]
     start = int(rng.integers(int(0.2 * T), int(0.8 * T)))
-    sev = rng.uniform(0.3, 1.0)
+    sev = scale * rng.uniform(0.3, 1.0)
     # Step change in operating mode: shift load-coupled channels after the change point.
     for c in (*CURRENT, *VOLTAGE):
         X[c, start:] += sev * rng.uniform(-1, 1)
@@ -191,9 +206,11 @@ def inject_regime_shift(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
     )
 
 
-def inject_slow_degradation(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_slow_degradation(
+    X: np.ndarray, rng: np.random.Generator, scale: float = 1.0
+) -> EventMeta:
     T = X.shape[1]
-    sev = rng.uniform(0.3, 1.0)
+    sev = scale * rng.uniform(0.3, 1.0)
     ramp = _ramp(T) * sev
     # Gradual whole-window drift across temperature + a voltage channel.
     X[TEMPERATURE[0]] += ramp
@@ -203,7 +220,7 @@ def inject_slow_degradation(X: np.ndarray, rng: np.random.Generator) -> EventMet
     )
 
 
-def inject_compound_fault(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
+def inject_compound_fault(X: np.ndarray, rng: np.random.Generator, scale: float = 1.0) -> EventMeta:
     """Two overlapping single-events composed together."""
     components = [
         inject_voltage_sag,
@@ -215,7 +232,7 @@ def inject_compound_fault(X: np.ndarray, rng: np.random.Generator) -> EventMeta:
     affected: list[int] = []
     names: list[str] = []
     for idx in chosen:
-        m = components[int(idx)](X, rng)
+        m = components[int(idx)](X, rng, scale)
         affected.extend(m.affected_channels)
         names.append(m.name)
     return EventMeta(

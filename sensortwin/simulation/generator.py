@@ -11,10 +11,14 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from sensortwin.simulation.dynamics import base_channels
+from sensortwin.simulation.dynamics import base_channels, benign_activity
 from sensortwin.simulation.events import INJECTORS, N_CHANNELS, EventClass, EventMeta
 from sensortwin.simulation.noise import apply_artifacts
 from sensortwin.utils.seeds import spawn_child_rngs
+
+# Bumped whenever a change alters generated data for a fixed seed, so saved datasets and
+# reported results can be traced to the generator that produced them.
+GENERATOR_VERSION = 2
 
 
 @dataclass
@@ -24,7 +28,16 @@ class GenConfig:
     n_samples: int = 20_000
     T: int = 512
     seed: int = 0
-    normalize: bool = True  # per-channel z-score using train-time stats kept in metadata
+    # Off by default: z-scoring here uses whole-dataset statistics (test rows included), which
+    # leaks into any downstream train/test split. Fit a ChannelStandardizer on the train split
+    # instead; enable only for quick exploratory plots where leakage does not matter.
+    normalize: bool = False
+    # Multiplies every event's sampled severity. 1.0 is the standard tier; < 1 shrinks events
+    # toward the noise floor (the low-SNR tier for robustness studies).
+    severity_scale: float = 1.0
+    # Mild label-free background events present in every class (see dynamics.benign_activity).
+    # Set rate to 0 to disable.
+    benign_activity: dict = field(default_factory=lambda: {"rate": 1.0, "max_events": 2})
     artifacts: dict = field(
         default_factory=lambda: {
             "gaussian_sigma": 0.02,
@@ -41,11 +54,18 @@ class GenConfig:
 
 
 def generate_sample(
-    rng: np.random.Generator, T: int, event_class: int, artifacts: dict
+    rng: np.random.Generator,
+    T: int,
+    event_class: int,
+    artifacts: dict,
+    benign: dict | None = None,
+    severity_scale: float = 1.0,
 ) -> tuple[np.ndarray, EventMeta]:
     """Generate a single ``[C, T]`` sample for a given event class."""
     X = base_channels(T, rng)
-    meta = INJECTORS[EventClass(event_class)](X, rng)
+    if benign:
+        benign_activity(X, rng, **benign)
+    meta = INJECTORS[EventClass(event_class)](X, rng, severity_scale)
     X = apply_artifacts(X, rng, artifacts)
     return X.astype(np.float32), meta
 
@@ -76,7 +96,9 @@ def generate_dataset(cfg: GenConfig) -> tuple[np.ndarray, np.ndarray, dict]:
     X = np.empty((cfg.n_samples, N_CHANNELS, cfg.T), dtype=np.float32)
     events: list[dict] = []
     for i in range(cfg.n_samples):
-        x_i, meta_i = generate_sample(rngs[i], cfg.T, int(y[i]), cfg.artifacts)
+        x_i, meta_i = generate_sample(
+            rngs[i], cfg.T, int(y[i]), cfg.artifacts, cfg.benign_activity, cfg.severity_scale
+        )
         X[i] = x_i
         events.append(meta_i.to_dict())
 
@@ -89,6 +111,7 @@ def generate_dataset(cfg: GenConfig) -> tuple[np.ndarray, np.ndarray, dict]:
 
     meta = {
         "config": asdict(cfg),
+        "generator_version": GENERATOR_VERSION,
         "n_channels": N_CHANNELS,
         "event_classes": [c.name for c in EventClass],
         "channel_stats": channel_stats,

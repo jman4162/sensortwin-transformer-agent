@@ -35,7 +35,11 @@ def _setup():
 def test_truncate_window_shape():
     X = np.zeros((4, 8, 100), dtype=np.float32)
     assert truncate_window(X, 0.5).shape == (4, 8, 50)
-    assert truncate_window(X, 0.01).shape[2] == 1  # at least one step
+    # Floors at min_length (the transformer's default patch_len) so no model sees zero patches.
+    assert truncate_window(X, 0.01).shape[2] == 16
+    assert truncate_window(X, 0.01, min_length=1).shape[2] == 1
+    # min_length never exceeds the available window.
+    assert truncate_window(X, 0.01, min_length=500).shape[2] == 100
 
 
 def test_severity_sweep_keys_and_delta():

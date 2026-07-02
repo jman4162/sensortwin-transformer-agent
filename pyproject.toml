@@ -68,6 +68,8 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "scripts/sim2real_transfer.py" = ["E402", "E501"]
 "scripts/run_agent.py" = ["E402", "E501"]
 "scripts/make_figures.py" = ["E402", "E501"]
+"scripts/tune_baselines.py" = ["E402", "E501"]
+"scripts/compare_models.py" = ["E402", "E501"]
 
 [tool.black]
 line-length = 100

@@ -119,6 +119,11 @@ class SensorPatchTST(nn.Module):
 
     def _patchify(self, x: torch.Tensor) -> torch.Tensor:
         """``[B, C, T]`` -> ``[B, C, N_patches, patch_len]`` via a strided sliding window."""
+        if x.shape[2] < self.patch_len:
+            raise ValueError(
+                f"input window T={x.shape[2]} is shorter than patch_len={self.patch_len}; "
+                "unfold would produce zero patches (e.g. an over-aggressive truncate_window)"
+            )
         # unfold over the time dimension; drops a tail shorter than patch_len.
         return x.unfold(dimension=2, size=self.patch_len, step=self.stride)
 

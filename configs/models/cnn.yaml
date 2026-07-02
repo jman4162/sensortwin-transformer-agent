@@ -1,10 +1,25 @@
 # SensorCNN baseline hyperparameters (spec §9.1 local-pattern baseline).
+#
+# Training-parity recipe: the same family as the transformer's (AdamW + weight decay +
+# label smoothing + cosine-warmup + identical augmentation stack), so model comparisons
+# measure architecture, not training budget. Change one knob only as an explicit ablation.
+# `scripts/tune_baselines.py` runs the shared lr/capacity grid on validation macro-F1;
+# commit its selection here.
 model:
   widths: [32, 64, 128]
   kernel_size: 5
   dropout: 0.3
 train:
+  optimizer: adamw
   lr: 0.001
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  scheduler: cosine_warmup
+  warmup_epochs: 5
   batch_size: 64
   epochs: 30
   patience: 8
+  augment:
+    jitter: 0.03
+    scaling: [0.8, 1.2]
+    channel_dropout: 0.1

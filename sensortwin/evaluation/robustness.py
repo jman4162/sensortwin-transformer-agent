@@ -27,13 +27,16 @@ def zero_channels(X: np.ndarray, channels: list[int]) -> np.ndarray:
     return out
 
 
-def truncate_window(X: np.ndarray, keep_fraction: float) -> np.ndarray:
+def truncate_window(X: np.ndarray, keep_fraction: float, *, min_length: int = 16) -> np.ndarray:
     """Keep only the first ``keep_fraction`` of the time axis (shorter observation window).
 
     The patch-transformer and CNN both accept variable ``T`` (patchify / global pooling), so a
-    truncated window is a valid input rather than a padded one.
+    truncated window is a valid input rather than a padded one. ``min_length`` floors the kept
+    window at the transformer's default ``patch_len`` so a sweep cannot produce an input with
+    zero patches.
     """
-    keep = max(1, int(round(keep_fraction * X.shape[2])))
+    keep = max(min_length, int(round(keep_fraction * X.shape[2])))
+    keep = min(keep, X.shape[2])
     return X[:, :, :keep]
 
 
