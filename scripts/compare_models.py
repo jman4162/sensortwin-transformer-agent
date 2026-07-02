@@ -242,14 +242,44 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
+    out_dir = Path(args.out)
+    ckpt_dir = out_dir / "per_seed"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    # Per-seed checkpoints: a multi-hour run killed partway resumes instead of restarting.
+    # A checkpoint is reused only if it covers the requested models at the same mode/epochs.
     per_seed: dict[int, dict[str, dict[str, Any]]] = {}
     for seed in args.seeds:
+        ckpt = ckpt_dir / f"seed_{seed}.json"
+        if ckpt.exists():
+            saved = json.loads(ckpt.read_text())
+            if saved["meta"] == {"mode": args.mode, "epochs": args.epochs} and all(
+                m in saved["results"] for m in models
+            ):
+                print(f"[seed {seed}] reusing checkpoint {ckpt}")
+                per_seed[seed] = saved["results"]
+                continue
         per_seed[seed] = _run_seed(seed, models, args)
+        ckpt.write_text(
+            json.dumps(
+                {"meta": {"mode": args.mode, "epochs": args.epochs}, "results": per_seed[seed]},
+                indent=2,
+            )
+        )
+
+    import platform
+
+    import torch
 
     summary = _aggregate(per_seed, models, args.alpha)
-    meta = {"mode": args.mode, "epochs": args.epochs, "no_augment": args.no_augment}
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "mode": args.mode,
+        "epochs": args.epochs,
+        "no_augment": args.no_augment,
+        "device": args.device or ("cuda" if torch.cuda.is_available() else "cpu"),
+        "torch": torch.__version__,
+        "platform": platform.platform(),
+    }
     (out_dir / "headline_comparison.json").write_text(
         json.dumps({"meta": meta, "summary": summary, "per_seed": per_seed}, indent=2) + "\n"
     )

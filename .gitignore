@@ -36,6 +36,9 @@ reports/figures/*
 reports/experiment_summaries/figures/
 reports/experiment_summaries/metrics_*.json
 reports/experiment_summaries/metrics_*.csv
+# compare_models per-seed resume checkpoints (headline_comparison.{json,md} IS committed).
+reports/experiment_summaries/**/per_seed/
+reports/experiment_summaries/per_seed/
 # Ablation table needs colab_standard + seed averaging to be meaningful; generate with `make ablate`.
 reports/experiment_summaries/transformer_ablations.md
 # Label-efficiency curve likewise needs colab_standard + seeds; generate with `make label-efficiency`.
