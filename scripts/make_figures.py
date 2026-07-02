@@ -6,9 +6,11 @@ Four figures, all reproducible:
   * perclass_delta.png     — per-class F1 gain of the transformer over the best baseline (cnn).
   * saliency_overlay.png   — integrated-gradients saliency over a signal vs the true event region.
 
-The first three are GPU-free (generator + recorded numbers). The saliency figure trains a small
-SensorPatchTST on CPU (~1-2 min) and is skipped if torch is unavailable. Recorded numbers come from
-the README quick-demo table and the 3-seed colab_standard run (see reports/research_log.md).
+The first three are GPU-free. The saliency figure trains a small SensorPatchTST on CPU
+(~1-2 min) and is skipped if torch is unavailable. The scale and per-class figures read their
+numbers from committed ``headline_comparison.json`` artifacts (written by
+``scripts/compare_models.py``) rather than hardcoding them, so every plotted number traces to a
+reproducible run.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from sensortwin.utils.runtime import configure_omp
 configure_omp()  # macOS-only OpenMP guard; must precede any torch import
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -32,29 +35,18 @@ from sensortwin.evaluation.plots import (
 from sensortwin.simulation import GenConfig, generate_dataset
 from sensortwin.simulation.events import CHANNELS, EVENT_CLASSES
 
-# Macro-F1 per model at the two scales (test split). 2k = README quick-demo; 20k = 3-seed comparison.
-_SCALE = {
-    "transformer": {2000: 0.435, 20000: 0.900},
-    "cnn": {2000: 0.504, 20000: 0.844},
-    "xgboost": {2000: 0.620, 20000: 0.759},
-    "logreg": {2000: 0.571, 20000: 0.697},
-    "random_forest": {2000: 0.543, 20000: 0.691},
-    "lstm": {2000: 0.338, 20000: 0.545},
-}
+# Committed compare_models artifacts, one per dataset scale.
+_HEADLINE_20K = "reports/experiment_summaries/headline_comparison.json"
+_HEADLINE_2K = "reports/experiment_summaries/scale_2k/headline_comparison.json"
+_MODE_SIZES = {"quick_demo": 2000, "colab_standard": 20000, "full_reproduction": 100000}
 
-# Per-class F1 delta (transformer − cnn), mean over the 3 colab_standard seeds.
-_PERCLASS_DELTA = {
-    "sensor_dropout": 0.135,
-    "regime_shift": 0.120,
-    "normal": 0.091,
-    "voltage_sag": 0.082,
-    "compound_fault": 0.043,
-    "correlated_channel_fault": 0.032,
-    "thermal_drift": 0.027,
-    "current_spike": 0.011,
-    "oscillatory_instability": 0.011,
-    "slow_degradation": 0.009,
-}
+
+def _load_headline(path: str) -> dict[str, Any] | None:
+    p = Path(path)
+    if not p.exists():
+        print(f"  ({path} missing — run scripts/compare_models.py first)")
+        return None
+    return json.loads(p.read_text())
 
 
 def _gallery(out: Path) -> None:
@@ -66,12 +58,29 @@ def _gallery(out: Path) -> None:
 
 
 def _scale(out: Path) -> None:
-    plot_scale_comparison(_SCALE, out / "scale_comparison.png")
+    scale: dict[str, dict[int, float]] = {}
+    for path in (_HEADLINE_2K, _HEADLINE_20K):
+        run = _load_headline(path)
+        if run is None:
+            continue
+        n = _MODE_SIZES[run["meta"]["mode"]]
+        for name, m in run["summary"]["models"].items():
+            scale.setdefault(name, {})[n] = m["mean"]
+    if not scale or min(len(v) for v in scale.values()) < 2:
+        print("  scale_comparison.png SKIPPED (need runs at both scales)")
+        return
+    plot_scale_comparison(scale, out / "scale_comparison.png")
     print("  scale_comparison.png")
 
 
 def _perclass(out: Path) -> None:
-    plot_perclass_delta(_PERCLASS_DELTA, out / "perclass_delta.png")
+    run = _load_headline(_HEADLINE_20K)
+    if run is None or "headline" not in run["summary"]:
+        print("  perclass_delta.png SKIPPED (no headline comparison in the artifact)")
+        return
+    pc = run["summary"]["headline"]["per_class_vs_best_baseline"]
+    deltas = {cls: d["delta"] for cls, d in sorted(pc.items(), key=lambda kv: -kv[1]["delta"])}
+    plot_perclass_delta(deltas, out / "perclass_delta.png")
     print("  perclass_delta.png")
 
 

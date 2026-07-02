@@ -40,6 +40,10 @@ from sensortwin.utils.seeds import set_torch_seed
 
 ARMS = ["scratch", "pretrained_ft", "pretrained_probe", "cnn", "xgboost"]
 DEFAULT_FRACTIONS = [0.01, 0.05, 0.10, 1.0]
+# Per-arm learning-rate candidates, selected on validation macro-F1. Both transformer arms get
+# the same two-point budget so "pretraining did not help" cannot be an artifact of the fine-tune
+# arm training at a fixed lower LR than scratch (the confound in the 2026-06-25 run).
+ARM_LRS = (1e-3, 1e-4)
 _LOOP_KEYS = (
     "optimizer",
     "lr",
@@ -107,7 +111,7 @@ def _run_fraction(
 ) -> dict[str, dict[str, float]]:
     import torch  # noqa: F401
 
-    from sensortwin.models.cnn import SensorCNN
+    from scripts.train_baseline import _build_deep_model
     from sensortwin.models.transformer import SensorPatchTST
     from sensortwin.training.loop import class_weights, train_model
     from sensortwin.training.pretrain import freeze_encoder, transfer_encoder
@@ -122,32 +126,44 @@ def _run_fraction(
     sub_ds = SensorArrayDataset(Xsub, ysub).as_torch()
     weight = class_weights(ysub, len(EVENT_CLASSES))
 
+    def train_best_lr(build_model, block) -> tuple[Any, float]:
+        """Train at each candidate LR; keep the best by validation macro-F1 (never test).
+
+        Both transformer arms get this identical budget, removing the old confound where the
+        pretrained arms fine-tuned at a fixed lower LR than scratch and were undertrained.
+        """
+        best_model, best_val, best_lr = None, -1.0, ARM_LRS[0]
+        for lr in ARM_LRS:
+            kw = _loop_kwargs(block, epochs_ft) | {"lr": lr}
+            m, hist = train_model(build_model(), sub_ds, val_ds, weight=weight, device=device, **kw)
+            if hist.best_val_macro_f1 > best_val:
+                best_model, best_val, best_lr = m, hist.best_val_macro_f1, lr
+        return best_model, best_lr
+
     out: dict[str, dict[str, float]] = {}
 
-    # 1. scratch transformer (supervised recipe)
-    m: Any = SensorPatchTST(**model_cfg)
-    m, _ = train_model(
-        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(sup_block, epochs_ft)
-    )
-    out["scratch"] = _eval_torch(m, test_ds, y[te], device)
+    # 1. scratch transformer (supervised recipe, per-arm LR selected on val)
+    m, lr = train_best_lr(lambda: SensorPatchTST(**model_cfg), sup_block)
+    out["scratch"] = _eval_torch(m, test_ds, y[te], device) | {"lr": lr}
 
-    # 2. pretrained + full fine-tune
-    m = transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg))
-    m, _ = train_model(
-        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(ft_block, epochs_ft)
+    # 2. pretrained + full fine-tune (same LR budget as scratch)
+    m, lr = train_best_lr(
+        lambda: transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg)), ft_block
     )
-    out["pretrained_ft"] = _eval_torch(m, test_ds, y[te], device)
+    out["pretrained_ft"] = _eval_torch(m, test_ds, y[te], device) | {"lr": lr}
 
-    # 3. pretrained + linear probe (frozen encoder)
-    m = freeze_encoder(transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg)))
-    m, _ = train_model(
-        m, sub_ds, val_ds, weight=weight, device=device, **_loop_kwargs(ft_block, epochs_ft)
+    # 3. pretrained + linear probe (frozen encoder, same LR budget)
+    m, lr = train_best_lr(
+        lambda: freeze_encoder(transfer_encoder(pretrained_state, SensorPatchTST(**model_cfg))),
+        ft_block,
     )
-    out["pretrained_probe"] = _eval_torch(m, test_ds, y[te], device)
+    out["pretrained_probe"] = _eval_torch(m, test_ds, y[te], device) | {"lr": lr}
 
-    # 4. CNN baseline
-    m = SensorCNN()
-    m, _ = train_model(m, sub_ds, val_ds, weight=weight, epochs=epochs_ft, device=device)
+    # 4. CNN baseline (its committed parity recipe, not the bare training loop)
+    m, cnn_kwargs = _build_deep_model("cnn")
+    m, _ = train_model(
+        m, sub_ds, val_ds, weight=weight, device=device, **(cnn_kwargs | {"epochs": epochs_ft})
+    )
     out["cnn"] = _eval_torch(m, test_ds, y[te], device)
 
     # 5. XGBoost on engineered features
