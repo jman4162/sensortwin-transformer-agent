@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer ablate label-efficiency robustness-study interpretability real-data sim2real agent clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer tune headline headline-quick full-reproduction ablate label-efficiency robustness-study interpretability real-data sim2real agent clean
 
 install:           ## Install core package
 	pip install -e .
@@ -32,6 +32,18 @@ baselines:         ## Train + evaluate the v0.2 baselines (quick-demo) and write
 
 transformer:       ## Train SensorPatchTST alongside the baselines (quick-demo)
 	python -m scripts.train_baseline --models logreg,xgboost,cnn,lstm,transformer --mode quick_demo --epochs 15
+
+tune:              ## Shared lr/capacity grid for all deep models, selected on val macro-F1
+	python -m scripts.tune_baselines --mode colab_standard --epochs 30
+
+headline:          ## THE headline result: all models x 5 seeds at colab_standard (GPU recommended)
+	python -m scripts.compare_models --mode colab_standard --seeds 0 1 2 3 4 --epochs 30
+
+headline-quick:    ## Wiring-grade version of the headline comparison (CPU-friendly)
+	python -m scripts.compare_models --mode quick_demo --seeds 0 1 2 --epochs 5
+
+full-reproduction: ## 100k-sample tier of the headline comparison (long; GPU required)
+	python -m scripts.compare_models --mode full_reproduction --seeds 0 1 2 3 4 --epochs 30
 
 ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
 	python -m scripts.ablate_transformer --mode quick_demo --epochs 15
