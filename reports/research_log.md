@@ -44,11 +44,12 @@ transformer is the model that exploits them.
 **Caveats.** Synthetic only; one shared recipe (designed around the transformer — the shared
 lr × capacity grid in `make tune` exists to bound this and has not yet been run at scale);
 n = 5 seeds; MPS/CPU FP32, not the T4 path. Calibration trade-off persists (transformer ECE
-0.087; temperature-scaling re-measurement at generator v2 in progress).
+0.087) and the temperature-scaling fix replicates at generator v2: T = 0.64 ± 0.01 fit on
+validation cuts test ECE 0.091 ± 0.008 → 0.016 ± 0.005, zero predictions changed (3 seeds,
+`make calibration`, committed artifact).
 
-**Next.** Fill the calibration re-measurement into the model card; matched-budget
-label-efficiency re-run (`ARM_LRS` selection now removes the fine-tune confound); robustness
-with and without the `--no-augment` arm; `make tune` at colab_standard.
+**Next.** Matched-budget label-efficiency re-run (`ARM_LRS` selection now removes the fine-tune
+confound); robustness with and without the `--no-augment` arm; `make tune` at colab_standard.
 
 ---
 

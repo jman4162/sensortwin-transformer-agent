@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer tune headline headline-quick full-reproduction ablate label-efficiency robustness-study interpretability real-data sim2real agent clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer tune headline headline-quick full-reproduction calibration ablate label-efficiency robustness-study interpretability real-data sim2real agent clean
 
 install:           ## Install core package
 	pip install -e .
@@ -44,6 +44,9 @@ headline-quick:    ## Wiring-grade version of the headline comparison (CPU-frien
 
 full-reproduction: ## 100k-sample tier of the headline comparison (long; GPU required)
 	python -m scripts.compare_models --mode full_reproduction --seeds 0 1 2 3 4 --epochs 30
+
+calibration:       ## Temperature-scaling study for the transformer (3 seeds; GPU/MPS for colab_standard)
+	python -m scripts.calibrate_transformer --mode colab_standard --seeds 0 1 2 --epochs 30
 
 ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
 	python -m scripts.ablate_transformer --mode quick_demo --epochs 15

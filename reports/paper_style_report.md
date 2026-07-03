@@ -166,34 +166,41 @@ while logistic regression is nearly calibrated out of the box (0.018). Temperatu
 
 ### 5.1 Calibration
 
-Prior single-seed evidence (generator v1): the transformer was the most accurate and worst
-calibrated; one temperature parameter fit on validation logits cut ECE ≈ 0.09 → 0.02 without
-changing any prediction. **[TBD: re-measure at generator v2; multi-seed.]**
+Re-measured at generator v2 (3 seeds, `make calibration`): one temperature parameter per seed,
+fit on validation logits (T = 0.64 ± 0.01), cuts the transformer's test ECE from 0.091 ± 0.008
+to **0.016 ± 0.005** with zero predictions changed — temperature scaling preserves the argmax by
+construction, so the accuracy column is untouched. The transformer is therefore the most
+accurate model and, after a one-parameter post-hoc fit, also among the best calibrated. Artifact:
+`reports/experiment_summaries/calibration_temperature.json`.
 
 ### 5.2 Robustness
 
 Noise, short-window, missing-channel, and domain-shift sweeps
 (`scripts/robustness_report.py`). Prior wiring-grade signal: the strongest in-distribution
-model degraded most under domain shift. **[TBD: colab_standard, ≥3 seeds, augmented and
-unaugmented arms.]**
+model degraded most under domain shift. Not yet run at research grade: the colab_standard,
+multi-seed version with both the augmented and `--no-augment` arms is wired
+(`make robustness-study`) and queued as follow-up work.
 
 ### 5.3 Interpretability
 
 Attribution maps are scored against the generator's ground-truth event windows
 (`localization_score`) with a random-placement baseline — not eyeballed. Prior wiring-grade
 finding, consistent with Jain & Wallace (2019): integrated gradients localized above chance;
-attention pooling weights did not. **[TBD: re-run at trained scale.]**
+attention pooling weights did not. The properly-trained (colab_standard) re-measurement is
+queued as follow-up work; the wiring-grade result should be read as a method demonstration.
 
 ## 6. Negative and null results
 
 - **Masked-patch pretraining did not improve label efficiency** at the budgets tested
   (1/5/10/100% labels, single seed, generator v1). A known confound — the pretrained arms
   fine-tuned at a lower learning rate for fewer epochs — means the honest verdict is "no help at
-  this budget," not "does not transfer." **[TBD: matched-budget re-run.]**
+  this budget," not "does not transfer." The sweep now selects each arm's learning rate from the
+  same validation budget, and the matched re-run is queued as follow-up work.
 - **Attention is not an explanation** here: pooling weights localized events below the random
   baseline in the wiring-grade run.
-- **At 2k samples the transformer loses** to feature baselines — capacity without data is a
-  liability, which is the expected result and reported as such.
+- **The transformer's small-data weakness is per-class, not wholesale.** The earlier claim that
+  it loses outright at 2k did not survive training parity (§4.2); what remains true is that its
+  advantage on structural classes (`regime_shift`, `sensor_dropout`) inverts to a deficit at 2k.
 
 ## 7. Threats to validity
 

@@ -74,10 +74,11 @@ scaling** (one parameter fit on validation) is provided; as is standard, models 
 overconfident under distribution shift, and temperature scaling reduces ECE without changing
 accuracy. Accuracy and calibration rankings differ: in the 5-seed headline run the two most
 accurate models are also the worst-calibrated supervised ones (transformer ECE 0.087, CNN 0.135)
-while logistic regression is nearly calibrated out of the box (0.018). An earlier
-single-seed run (generator v1) showed a single temperature fit cutting the transformer's ECE
-from ≈0.09 to ≈0.017 with predictions unchanged; the generator-v2 re-measurement is
-**[pending — 3-seed run in progress]**.
+while logistic regression is nearly calibrated out of the box (0.018). A single temperature fit
+per seed (T = 0.64 ± 0.01 on validation logits) cuts the transformer's test ECE from
+0.091 ± 0.008 to **0.016 ± 0.005** with zero predictions changed (3 seeds, `make calibration`;
+artifact: `reports/experiment_summaries/calibration_temperature.json`). Most accurate and
+well-calibrated after a one-parameter fit.
 
 ## 10. Known failure modes
 - The transformer's data-hunger shows **per class, not in the headline mean**: at 2k (5 seeds,

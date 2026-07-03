@@ -132,9 +132,10 @@ marginal-preserving by construction, so no single-channel statistic can detect i
 
 The trend classes show no advantage (`slow_degradation` +0.00, `thermal_drift` +0.01, both
 n.s.): features and convolutions already capture monotone drifts. One honest trade-off: the transformer
-is the most accurate and among the worst calibrated (ECE 0.087 vs logreg 0.018); a single
-temperature fit on validation (`evaluation/calibration.py`) corrects this without changing any
-prediction (see the [model card](reports/model_card.md)).
+is the most accurate and among the worst calibrated (ECE 0.087 vs logreg 0.018). A single
+temperature fit on validation (T = 0.64 ± 0.01, `make calibration`) cuts its test ECE to
+0.016 ± 0.005 with zero predictions changed (3 seeds; see the
+[model card](reports/model_card.md)).
 
 ### Small-scale contrast (2k, same protocol, 5 seeds)
 
