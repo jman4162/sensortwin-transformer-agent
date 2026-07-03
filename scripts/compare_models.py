@@ -31,7 +31,7 @@ from typing import Any
 import numpy as np
 from sklearn.metrics import f1_score
 
-from scripts.train_baseline import DEEP_MODELS, _build_deep_model
+from scripts.train_baseline import DEEP_CONFIGS, DEEP_MODELS, _build_deep_model
 from sensortwin.data.dataset import SensorArrayDataset
 from sensortwin.data.splits import make_split
 from sensortwin.data.transforms import ChannelStandardizer
@@ -93,7 +93,9 @@ def _run_seed(
         elif name in DEEP_MODELS:
             from sensortwin.training.loop import class_weights, predict_proba, train_model
 
-            model, train_kwargs = _build_deep_model(name, use_augment=not args.no_augment)
+            model, train_kwargs = _build_deep_model(
+                name, use_augment=not args.no_augment, config_dir=args.model_config_dir
+            )
             train_ds = SensorArrayDataset(standardizer.transform(X[tr]), y[tr]).as_torch()
             val_ds = SensorArrayDataset(standardizer.transform(X[va]), y[va]).as_torch()
             test_ds = SensorArrayDataset(standardizer.transform(X[te]), y[te]).as_torch()
@@ -174,8 +176,13 @@ def _write_md(summary: dict[str, Any], out_dir: Path, meta: dict[str, Any]) -> P
         "",
         f"Mode `{meta['mode']}`, seeds {seeds}, {meta['epochs']} epochs, "
         f"{'no augmentation' if meta['no_augment'] else 'shared augmentation recipe'}. "
-        "All deep models share one training recipe family (`configs/models/*.yaml`); "
-        "classical baselines fit engineered features. Metrics on the held-out test split; "
+        + (
+            f"Deep models at their grid-selected recipes from `{meta['model_config_dir']}` "
+            "(the tuned-recipe check)"
+            if meta.get("model_config_dir")
+            else "All deep models share one training recipe family (`configs/models/*.yaml`)"
+        )
+        + "; classical baselines fit engineered features. Metrics on the held-out test split; "
         "mean ± sample std over seeds.",
         "",
         "| Model | Macro-F1 (mean ± std) | ECE | Per-seed |",
@@ -238,34 +245,51 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default=None)
     p.add_argument("--no-amp", action="store_true")
     p.add_argument("--no-augment", action="store_true")
+    p.add_argument(
+        "--model-config-dir",
+        default=None,
+        help="alternate configs/models dir (e.g. configs/models/tuned for the grid-selected "
+        "recipes); default uses the committed shared parity recipe",
+    )
     p.add_argument("--out", default="reports/experiment_summaries")
     args = p.parse_args(argv)
+
+    import hashlib
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
     out_dir = Path(args.out)
     ckpt_dir = out_dir / "per_seed"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
+    # Recipe fingerprint: a checkpoint from one set of model configs must never be reused after
+    # the configs change (that would silently mix recipes within one table).
+    cfg_dir = Path(args.model_config_dir) if args.model_config_dir else None
+    hasher = hashlib.sha256()
+    for name in sorted(DEEP_CONFIGS):
+        path = (
+            Path(DEEP_CONFIGS[name]) if cfg_dir is None else cfg_dir / Path(DEEP_CONFIGS[name]).name
+        )
+        if path.exists():
+            hasher.update(path.read_bytes())
+    ckpt_meta = {
+        "mode": args.mode,
+        "epochs": args.epochs,
+        "recipes_sha256": hasher.hexdigest(),
+    }
+
     # Per-seed checkpoints: a multi-hour run killed partway resumes instead of restarting.
-    # A checkpoint is reused only if it covers the requested models at the same mode/epochs.
+    # Reused only for the same mode/epochs/recipes and when all requested models are covered.
     per_seed: dict[int, dict[str, dict[str, Any]]] = {}
     for seed in args.seeds:
         ckpt = ckpt_dir / f"seed_{seed}.json"
         if ckpt.exists():
             saved = json.loads(ckpt.read_text())
-            if saved["meta"] == {"mode": args.mode, "epochs": args.epochs} and all(
-                m in saved["results"] for m in models
-            ):
+            if saved["meta"] == ckpt_meta and all(m in saved["results"] for m in models):
                 print(f"[seed {seed}] reusing checkpoint {ckpt}")
                 per_seed[seed] = saved["results"]
                 continue
         per_seed[seed] = _run_seed(seed, models, args)
-        ckpt.write_text(
-            json.dumps(
-                {"meta": {"mode": args.mode, "epochs": args.epochs}, "results": per_seed[seed]},
-                indent=2,
-            )
-        )
+        ckpt.write_text(json.dumps({"meta": ckpt_meta, "results": per_seed[seed]}, indent=2))
 
     import platform
 
@@ -276,6 +300,7 @@ def main(argv: list[str] | None = None) -> None:
         "mode": args.mode,
         "epochs": args.epochs,
         "no_augment": args.no_augment,
+        "model_config_dir": args.model_config_dir,
         "device": args.device or ("cuda" if torch.cuda.is_available() else "cpu"),
         "torch": torch.__version__,
         "platform": platform.platform(),

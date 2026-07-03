@@ -1,0 +1,21 @@
+# SensorLSTM at its grid-selected cell (tuned-recipe check; see tune_lstm/tuning_results.md).
+# Selected on validation macro-F1 at colab_standard, seed 0: lr 1e-3, large capacity (539k).
+# The rest of the recipe family is unchanged from the shared parity recipe.
+model:
+  hidden_size: 128
+  num_layers: 2
+  dropout: 0.3
+train:
+  optimizer: adamw
+  lr: 0.001
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  scheduler: cosine_warmup
+  warmup_epochs: 5
+  batch_size: 64
+  epochs: 30
+  patience: 8
+  augment:
+    jitter: 0.03
+    scaling: [0.8, 1.2]
+    channel_dropout: 0.1

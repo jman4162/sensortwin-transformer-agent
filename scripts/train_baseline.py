@@ -143,7 +143,9 @@ def _deep_model_class(name: str) -> type:
     return SensorPatchTST
 
 
-def _build_deep_model(name: str, *, use_augment: bool = True) -> tuple[Any, dict[str, Any]]:
+def _build_deep_model(
+    name: str, *, use_augment: bool = True, config_dir: str | None = None
+) -> tuple[Any, dict[str, Any]]:
     """Return ``(model, train_kwargs)`` for a deep model.
 
     Every deep model reads its architecture and training recipe from ``configs/models/*.yaml``
@@ -154,12 +156,20 @@ def _build_deep_model(name: str, *, use_augment: bool = True) -> tuple[Any, dict
     ``use_augment=False`` strips train-time augmentation: the no-augmentation arm for robustness
     studies, where ``channel_dropout`` augmentation would otherwise train every model on the same
     corruption the missing-channel sweep probes.
+
+    ``config_dir`` swaps the config directory (same filenames) — used by the tuned-recipe check,
+    where each model runs at its grid-selected cell from ``configs/models/tuned/``.
     """
+    from pathlib import Path
+
     from sensortwin.training.augment import build_augment
 
     if name not in DEEP_CONFIGS:
         raise SystemExit(f"unknown deep model '{name}'")
-    cfg = load_yaml(DEEP_CONFIGS[name])
+    cfg_path = DEEP_CONFIGS[name]
+    if config_dir is not None:
+        cfg_path = str(Path(config_dir) / Path(cfg_path).name)
+    cfg = load_yaml(cfg_path)
     model = _deep_model_class(name)(**cfg.get("model", {}))
     tcfg = dict(cfg.get("train", {}))
     keys = (
