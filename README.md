@@ -32,6 +32,8 @@ The project is built in three layers, **in order** (the agent comes last, on pur
 
 The headline finding and the dataset, in two pictures (regenerate with `python -m scripts.make_figures`):
 
+![SensorPatchTST architecture](docs/figures/architecture.png)
+
 | The benchmark | The result |
 | --- | --- |
 | ![Dataset gallery](docs/figures/dataset_gallery.png) | ![Macro-F1 vs scale](docs/figures/scale_comparison.png) |

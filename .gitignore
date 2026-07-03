@@ -43,9 +43,8 @@ reports/experiment_summaries/per_seed/
 reports/experiment_summaries/transformer_ablations.md
 # Label-efficiency curve likewise needs colab_standard + seeds; generate with `make label-efficiency`.
 reports/experiment_summaries/label_efficiency.md
-# v0.5 study reports need colab_standard to be meaningful (model_card.md IS committed).
-reports/experiment_summaries/robustness_study.md
-reports/experiment_summaries/interpretability_report.md
+# The research-grade *_summary.{json,md} artifacts ARE committed; only the verbose/wiring
+# outputs below stay ignored.
 # v0.6 real-data study reports need the C-MAPSS download + --mode full to be meaningful.
 reports/experiment_summaries/cmapss_results.md
 reports/experiment_summaries/sim2real_transfer.md

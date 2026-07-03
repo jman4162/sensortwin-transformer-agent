@@ -213,6 +213,71 @@ def _write_report(curves, out_dir, mode, fractions, seeds, epochs_pre, epochs_ft
     return out
 
 
+def _write_summary(acc, out_dir: Path, args, fractions, epochs_pre, epochs_ft) -> Path:
+    """Committable ``label_efficiency_summary.{json,md}``: per-seed values, mean ± sample std,
+    and run metadata — the artifact behind any pretraining verdict in the public docs."""
+    import json
+    import platform
+
+    import torch
+
+    from sensortwin.evaluation.statistics import mean_std
+
+    meta = {
+        "mode": args.mode,
+        "seeds": args.seeds,
+        "base_seed": args.seed,
+        "epochs_pretrain": epochs_pre,
+        "epochs_finetune": epochs_ft,
+        "arm_lrs": list(ARM_LRS),
+        "device": args.device or ("cuda" if torch.cuda.is_available() else "cpu"),
+        "torch": torch.__version__,
+        "platform": platform.platform(),
+    }
+    table = {
+        a: {
+            f"{f:g}": {
+                "per_seed": acc[a][f],
+                "mean": mean_std(acc[a][f])[0],
+                "std": mean_std(acc[a][f])[1],
+            }
+            for f in fractions
+        }
+        for a in ARMS
+    }
+    (out_dir / "label_efficiency_summary.json").write_text(
+        json.dumps({"meta": meta, "arms": table}, indent=2) + "\n"
+    )
+
+    def _fmt(cell):
+        sd = cell["std"]
+        return f"{cell['mean']:.3f}" if np.isnan(sd) else f"{cell['mean']:.3f} ± {sd:.3f}"
+
+    lines = [
+        "# Label efficiency (masked pretraining vs scratch)",
+        "",
+        f"Mode `{meta['mode']}`, {meta['seeds']} seed(s), pretrain {epochs_pre} / fine-tune "
+        f"{epochs_ft} epochs. Test macro-F1, mean ± sample std over seeds. Both transformer arms "
+        f"select their learning rate from the same validation budget {ARM_LRS}, so the "
+        "pretrained-vs-scratch comparison is not confounded by a fixed fine-tune LR.",
+        "",
+        "| Fraction | " + " | ".join(ARMS) + " |",
+        "| --- | " + " | ".join("---:" for _ in ARMS) + " |",
+    ]
+    for f in fractions:
+        row = " | ".join(_fmt(table[a][f"{f:g}"]) for a in ARMS)
+        lines.append(f"| {f * 100:g}% | {row} |")
+    lines += [
+        "",
+        "Regenerate: `python -m scripts.label_efficiency_sweep --mode "
+        f"{meta['mode']} --seeds {meta['seeds']} --epochs-pretrain {epochs_pre} "
+        f"--epochs-finetune {epochs_ft}`.",
+    ]
+    out = out_dir / "label_efficiency_summary.md"
+    out.write_text("\n".join(lines) + "\n")
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(
         description="Label-efficiency sweep (masked pretraining vs scratch)."
@@ -309,7 +374,8 @@ def main(argv: list[str] | None = None) -> None:
     curves = {a: {f: float(np.mean(acc[a][f])) for f in fractions} for a in ARMS}
     plot_label_efficiency(curves, out_dir / "figures" / "label_efficiency.png")
     report = _write_report(curves, out_dir, args.mode, fractions, args.seeds, epochs_pre, epochs_ft)
-    print(f"\nReport written to {report}")
+    summary = _write_summary(acc, out_dir, args, fractions, epochs_pre, epochs_ft)
+    print(f"\nReports written to {report} and {summary}")
 
 
 if __name__ == "__main__":

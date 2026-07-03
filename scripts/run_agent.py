@@ -93,11 +93,18 @@ def main(argv: list[str] | None = None) -> None:
         print(f"    {prop.label}: {status}")
 
     verdicts = review(baseline_result, results, alpha=guardrails.alpha)
+    # colab_standard sessions are research-grade evidence and get a committable filename;
+    # quick wiring runs keep the gitignored name so they never dirty the tree.
+    report_name = (
+        "agentic_ablation_colab.md"
+        if args.mode == "colab_standard"
+        else "agentic_ablation_report.md"
+    )
     report = write_report(
         baseline_result,
         results,
         verdicts,
-        out_dir / "agentic_ablation_report.md",
+        out_dir / report_name,
         meta={
             "planner": "HeuristicPlanner",
             "mode": args.mode,

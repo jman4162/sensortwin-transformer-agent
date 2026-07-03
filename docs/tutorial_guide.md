@@ -68,7 +68,8 @@ make tune                  # same lr x capacity grid for every deep model, selec
 ## 4. Pretraining and label efficiency
 
 ```bash
-make label-efficiency
+make label-efficiency        # wiring-grade
+make label-efficiency-full   # research-grade: 3 seeds, matched LR budgets (GPU/MPS)
 ```
 
 Masked-patch pretraining (`training/pretrain.py`) hides 40% of each channel's patches behind a
@@ -83,6 +84,8 @@ still provisional.
 ```bash
 make robustness-study      # noise / short-window / missing-channel / domain-shift sweeps
 make interpretability      # attention, occlusion, integrated gradients + localization score
+make robustness-full       # research-grade: 3 seeds, augmented + no-augment arms
+make interpretability-full # research-grade: 3 seeds; also writes the README confusion matrix
 ```
 
 The evaluation philosophy: accuracy at one operating point is the least interesting number.

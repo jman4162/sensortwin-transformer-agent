@@ -1,10 +1,14 @@
 """CLI: regenerate the committed portfolio figures under ``docs/figures/`` (roadmap viz).
 
-Four figures, all reproducible:
+Five figures, all reproducible:
   * dataset_gallery.png   — one example signal per event class, event region shaded (the benchmark).
-  * scale_comparison.png  — macro-F1 vs training size; the quick-demo -> colab_standard rank flip.
-  * perclass_delta.png     — per-class F1 gain of the transformer over the best baseline (cnn).
+  * architecture.png      — SensorPatchTST schematic (patchify -> embed -> encode -> pool -> head).
+  * scale_comparison.png  — macro-F1 vs training size from the committed headline artifacts.
+  * perclass_delta.png     — per-class F1 gain of the transformer over the best baseline.
   * saliency_overlay.png   — integrated-gradients saliency over a signal vs the true event region.
+
+(The sixth committed figure, confusion_matrix.png, is written by
+``scripts/interpretability_report.py`` at colab_standard — it needs a trained 20k model.)
 
 The first three are GPU-free. The saliency figure trains a small SensorPatchTST on CPU
 (~1-2 min) and is skipped if torch is unavailable. The scale and per-class figures read their
@@ -55,6 +59,62 @@ def _gallery(out: Path) -> None:
         X, meta["events"], EVENT_CLASSES, out / "dataset_gallery.png", channel_names=CHANNELS
     )
     print("  dataset_gallery.png")
+
+
+def _architecture(out: Path) -> None:
+    """Schematic of SensorPatchTST: patchify -> embed -> encode -> pool -> classify."""
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+
+    fig, ax = plt.subplots(figsize=(11, 3.2))
+    ax.set_xlim(0, 11)
+    ax.set_ylim(0, 3.2)
+    ax.axis("off")
+
+    stages = [
+        ("Input\n[8 ch × 512 t]", "8 coupled\nsensor channels", "#dbe9f6"),
+        ("Per-channel\npatchify", "len 16, stride 8\n→ 63 / channel", "#dbe9f6"),
+        (
+            "Patch tokens\n[504 × 128]",
+            "linear proj\n+ pos + channel emb",
+            "#e8e0f0",
+        ),
+        ("Transformer\nencoder", "4 layers, 4 heads\nd=128, pre-norm", "#e8e0f0"),
+        ("Attention\npooling", "1 learned query\nover all tokens", "#e0efe3"),
+        ("MLP head\n→ 10 classes", "LN → 128 → GELU\n→ logits", "#e0efe3"),
+    ]
+    w, h, y0 = 1.5, 1.35, 1.15
+    xs = [0.25 + i * 1.82 for i in range(len(stages))]
+    for x, (title, sub, color) in zip(xs, stages, strict=True):
+        ax.add_patch(
+            FancyBboxPatch((x, y0), w, h, boxstyle="round,pad=0.06", fc=color, ec="#5b6770", lw=1.2)
+        )
+        ax.text(
+            x + w / 2, y0 + h - 0.33, title, ha="center", va="center", fontsize=9.5, weight="bold"
+        )
+        ax.text(x + w / 2, y0 + 0.33, sub, ha="center", va="center", fontsize=7.3, color="#39414a")
+    for x_from, x_to in zip(xs[:-1], xs[1:], strict=True):
+        ax.add_patch(
+            FancyArrowPatch(
+                (x_from + w + 0.06, y0 + h / 2),
+                (x_to - 0.06, y0 + h / 2),
+                arrowstyle="-|>",
+                mutation_scale=14,
+                color="#5b6770",
+                lw=1.4,
+            )
+        )
+    ax.text(
+        0.25,
+        0.35,
+        "SensorPatchTST — 815k parameters. Attention mixes across channels and time jointly; "
+        "channel embeddings tell voltage tokens from vibration tokens.",
+        fontsize=8.5,
+        color="#39414a",
+    )
+    fig.savefig(out / "architecture.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print("  architecture.png")
 
 
 def _scale(out: Path) -> None:
@@ -157,6 +217,7 @@ def main(argv: list[str] | None = None) -> None:
     out.mkdir(parents=True, exist_ok=True)
     print(f"Writing figures to {out}/ ...")
     _gallery(out)
+    _architecture(out)
     _scale(out)
     _perclass(out)
     if not args.no_saliency:

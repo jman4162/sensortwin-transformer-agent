@@ -1,4 +1,4 @@
-.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer tune headline headline-quick full-reproduction calibration ablate label-efficiency robustness-study interpretability real-data sim2real agent clean
+.PHONY: install install-ml dev lint fmt typecheck test check data baselines transformer tune headline headline-quick full-reproduction calibration ablate label-efficiency label-efficiency-full robustness-study robustness-full interpretability interpretability-full real-data sim2real agent agent-full clean
 
 install:           ## Install core package
 	pip install -e .
@@ -54,11 +54,20 @@ ablate:            ## Run the SensorPatchTST ablation campaign (quick-demo)
 label-efficiency:  ## Masked-pretraining label-efficiency sweep (quick-demo; use colab_standard for real)
 	python -m scripts.label_efficiency_sweep --mode quick_demo --epochs-pretrain 20 --epochs-finetune 15
 
+label-efficiency-full: ## Research-grade sweep: 3 seeds, matched LR budgets (GPU/MPS, hours)
+	python -m scripts.label_efficiency_sweep --mode colab_standard --seeds 3 --epochs-pretrain 50 --epochs-finetune 30
+
 robustness-study:  ## Robustness + calibration study (noise/window/missing-channel/domain-shift)
 	python -m scripts.robustness_report --mode quick_demo --epochs 10
 
+robustness-full:   ## Research-grade: 3 seeds, augmented + no-augment arms (GPU/MPS, overnight)
+	python -m scripts.robustness_report --mode colab_standard --epochs 30 --seeds 0 1 2 --arm both
+
 interpretability:  ## Attention / occlusion / integrated-gradients + faithfulness check
 	python -m scripts.interpretability_report --mode quick_demo --epochs 10
+
+interpretability-full: ## Research-grade: 3 seeds at colab_standard; also writes the README confusion matrix
+	python -m scripts.interpretability_report --mode colab_standard --epochs 30 --seeds 0 1 2
 
 real-data:         ## Run the benchmark slate on real C-MAPSS (set RAW_DIR=/path/to/CMAPSSData)
 	python -m scripts.fetch_cmapss --raw-dir $(RAW_DIR) --mode quick_demo
@@ -69,6 +78,9 @@ sim2real:          ## Synthetic->real encoder transfer on C-MAPSS (needs data/cm
 
 agent:             ## Agentic experiment runner: plan -> run -> review one-variable ablations (quick)
 	python -m scripts.run_agent --epochs 6 --seeds 3 --max-experiments 3
+
+agent-full:        ## Research-grade agent session at colab_standard (committable report; GPU/MPS)
+	python -m scripts.run_agent --mode colab_standard --epochs 15 --seeds 3 --max-experiments 3
 
 clean:
 	rm -rf .pytest_cache .ruff_cache **/__pycache__ build dist *.egg-info
