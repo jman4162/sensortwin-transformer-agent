@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "mode": "colab_standard",
+    "seed": 0,
+    "epochs": 30
+  },
+  "grid": [
+    {
+      "model": "transformer",
+      "lr": 0.0003,
+      "capacity": "base",
+      "n_params": 814602,
+      "val_macro_f1": 0.8233,
+      "best_epoch": 24,
+      "train_time_s": 1606.9
+    },
+    {
+      "model": "transformer",
+      "lr": 0.0003,
+      "capacity": "large",
+      "n_params": 1824010,
+      "val_macro_f1": 0.8564,
+      "best_epoch": 28,
+      "train_time_s": 2027.9
+    },
+    {
+      "model": "transformer",
+      "lr": 0.001,
+      "capacity": "base",
+      "n_params": 814602,
+      "val_macro_f1": 0.8749,
+      "best_epoch": 25,
+      "train_time_s": 1535.1
+    },
+    {
+      "model": "transformer",
+      "lr": 0.001,
+      "capacity": "large",
+      "n_params": 1824010,
+      "val_macro_f1": 0.8688,
+      "best_epoch": 27,
+      "train_time_s": 2046.6
+    },
+    {
+      "model": "transformer",
+      "lr": 0.003,
+      "capacity": "base",
+      "n_params": 814602,
+      "val_macro_f1": 0.8218,
+      "best_epoch": 29,
+      "train_time_s": 1678.2
+    },
+    {
+      "model": "transformer",
+      "lr": 0.003,
+      "capacity": "large",
+      "n_params": 1824010,
+      "val_macro_f1": 0.8047,
+      "best_epoch": 28,
+      "train_time_s": 2445.6
+    }
+  ]
+}
