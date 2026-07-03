@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "mode": "colab_standard",
+    "epochs": 30,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "max_samples": 100,
+    "device": "mps",
+    "torch": "2.12.1",
+    "platform": "macOS-26.5-arm64-arm-64bit"
+  },
+  "results": [
+    {
+      "seed": 0,
+      "macro_f1": 0.8692,
+      "n_samples": 100,
+      "attention_loc": 0.0952,
+      "ig_loc": 0.521,
+      "random_loc": 0.1034
+    },
+    {
+      "seed": 1,
+      "macro_f1": 0.8651,
+      "n_samples": 100,
+      "attention_loc": 0.1094,
+      "ig_loc": 0.4646,
+      "random_loc": 0.0937
+    },
+    {
+      "seed": 2,
+      "macro_f1": 0.8775,
+      "n_samples": 100,
+      "attention_loc": 0.1255,
+      "ig_loc": 0.4637,
+      "random_loc": 0.1112
+    }
+  ]
+}

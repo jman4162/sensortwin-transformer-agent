@@ -64,9 +64,13 @@ real-data studies with `make real-data` / `make sim2real` (after the C-MAPSS dow
 
 ## 8. Robustness
 Evaluated as macro-F1 degradation from clean under: Gaussian-noise severity sweep, shorter
-observation windows, missing/zeroed channels, and a domain shift (a noisier measurement regime).
-`make robustness-study`. Models degrade differently by inductive bias; absolute robustness depends
-on data scale and is not claimed beyond the synthetic benchmark.
+observation windows, missing/zeroed channels, and a domain shift (a noisier measurement regime),
+at colab_standard × 3 seeds in augmented and unaugmented arms (`make robustness-full`; artifact:
+`robustness_summary.json`). Measured: the transformer degrades least under domain shift (0.49
+vs the CNN's 0.19 under domain B, unaugmented) and most under extreme Gaussian noise
+(worst-case delta 0.85 vs XGBoost's 0.59 at σ=0.2). Channel-dropout augmentation flatters the
+CNN's missing-channel numbers (0.54 vs 0.75 delta) but not the transformer's. Absolute
+robustness is not claimed beyond the synthetic benchmark.
 
 ## 9. Calibration
 ECE / Brier / reliability are reported on clean and shifted test sets. Post-hoc **temperature
@@ -78,7 +82,9 @@ while logistic regression is nearly calibrated out of the box (0.018). A single 
 per seed (T = 0.64 ± 0.01 on validation logits) cuts the transformer's test ECE from
 0.091 ± 0.008 to **0.016 ± 0.005** with zero predictions changed (3 seeds, `make calibration`;
 artifact: `reports/experiment_summaries/calibration_temperature.json`). Most accurate and
-well-calibrated after a one-parameter fit.
+well-calibrated after a one-parameter fit — **in distribution only**: the same temperature
+*worsens* ECE under domain shift for every deep model (transformer 0.24 → 0.38; see
+`robustness_summary.json`). Recalibrate after any regime change.
 
 ## 10. Known failure modes
 - The transformer's data-hunger shows **per class, not in the headline mean**: at 2k (5 seeds,
@@ -95,7 +101,15 @@ well-calibrated after a one-parameter fit.
   a matched-budget, multi-seed re-run is pending. Any gain may also reflect the encoder learning the
   generator's regularities rather than transferable structure.
 - Engineered features + gradient boosting are **surprisingly strong** on simple drift/spike events.
-- The hardest classes are `sensor_dropout`, `normal`, and `compound_fault`.
+- **Extreme noise breaks the transformer first**: at 10× the training noise floor its macro-F1
+  drops by 0.85 — worse than every baseline — despite jitter augmentation. Its shift robustness
+  does not generalize to heavy in-distribution corruption.
+- **Attention weights localize events at chance level** (0.110 vs random 0.103, 3 seeds,
+  300 events) while integrated gradients reach 0.483: use gradient/perturbation attributions,
+  never the pooling weights, when asking "where did the model look."
+- The hardest classes at trained scale are `sensor_dropout` and `correlated_channel_fault`,
+  both confused with `normal` (see `docs/figures/confusion_matrix.png`) — the two classes the
+  task-hardening deliberately made shortcut-free.
 
 ## 11. Ethical / safety considerations
 The data is synthetic, so there is no personal or sensitive information. The main risk is

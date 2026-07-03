@@ -6,6 +6,51 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-03 — robustness, interpretability, and an agent session at research grade
+
+**Question.** Three claims in the model card rested on wiring-grade runs: how models degrade
+under corruption and shift, whether saliency tracks the injected events, and whether the agent
+loop produces honest verdicts at scale. Do they hold with trained models and seeds?
+
+**Setup.** colab_standard, 3 seeds each, parity recipes, Apple M3 Max (MPS, FP32). Robustness:
+`make robustness-full` (4 models × 3 seeds × {augmented, no_augment} arms). Interpretability:
+`make interpretability-full` (300 pooled correctly-classified localized events). Agent:
+`make agent-full` (bounded by guardrails to 1,500 samples, 15 epochs, 3 one-variable ablations
+× 3 seeds). Committed artifacts: `robustness_summary.json`, `interpretability_summary.json`,
+`agentic_ablation_colab.md`.
+
+**Result — robustness.** The transformer degrades least under domain shift (domain-B macro-F1
+0.49 ± 0.06 vs cnn 0.19 ± 0.02 unaugmented, xgboost 0.27 ± 0.01) *and* degrades most under
+extreme Gaussian noise (worst-case Δ 0.85 vs xgboost 0.59 at σ = 0.2). The wiring-grade hint
+that "the strongest model degrades most under shift" was an undertrained-transformer artifact;
+it inverted at scale. Arm contrast: channel-dropout augmentation flatters the CNN's
+missing-channel Δ (0.54 vs 0.75) but not the transformer's (0.42 ± 0.10 vs 0.32 ± 0.03) — its
+channel-loss tolerance is architectural. Augmentation also *hurt* CNN shift robustness badly
+(0.04 vs 0.19). Pretraining bought no robustness (deltas +0.00 to +0.04).
+
+**Result — temperature scaling fails under shift (negative).** A temperature fitted on clean
+validation logits worsens shifted ECE for every deep model (transformer 0.24 → 0.38, cnn
+0.46 → 0.62 unaugmented). The 2026-07-02 calibration win is an in-distribution result only.
+
+**Result — interpretability.** With trained models (macro-F1 0.871 ± 0.006): integrated
+gradients localization **0.483 ± 0.033** vs random 0.103 ± 0.009 (~5× chance); attention
+pooling 0.110 ± 0.015 — statistically indistinguishable from random. The "attention is not
+explanation" finding survived proper training and sharpened.
+
+**Result — agent session.** Baseline 0.680 ± 0.006 at the bounded budget; all three proposals
+(dropout 0.2, d_model 192, 6 layers) reduced mean macro-F1; the Holm-gated reviewer returned
+three `no_change` verdicts and zero improvement claims — matching the proposals' own
+pre-registered failure modes, which is the behavior the guardrails exist to produce.
+
+**Caveats.** Synthetic only; 3 seeds; the agent session is bounded by its guardrails
+(1,500 samples), deliberately not a full-scale study; noise sweep tops out at σ = 0.2 (10× the
+training floor), which is a stress test rather than a realistic regime.
+
+**Next.** Matched-budget label-efficiency (Colab notebook 06) and C-MAPSS on the real download
+are the last open evidence items.
+
+---
+
 ## 2026-07-02 — the fair headline: parity + hardened task, 5 seeds, both scales
 
 **Question.** With every deep model on the identical recipe and the shortcut channels closed

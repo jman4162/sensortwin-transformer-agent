@@ -14,11 +14,13 @@ versus 0.774 ± 0.010 for the strongest baseline (a CNN trained with the identic
 architecture's inductive bias predicts: the largest Holm-surviving per-class deltas are
 `sensor_dropout` (+0.35), the marginal-preserving cross-channel fault (+0.20), and
 `regime_shift` (+0.10), while trend classes show no advantage. The transformer is also the worst
-calibrated of the accurate models (ECE 0.087). Masked-patch self-supervised pretraining did not
-improve label efficiency at the budgets previously tested (a matched-budget re-test is wired but
-not yet run at scale). In earlier wiring-grade runs, attention weights did not localize events
-better than chance while integrated gradients did. All results regenerate from committed configs
-and one command per table.
+calibrated of the accurate models (ECE 0.087; one temperature parameter fixes this
+in-distribution but not under shift), the most robust to domain shift, and the least robust to
+extreme noise. Attention-pooling weights localize injected events at chance level while
+integrated gradients concentrate ~5× chance mass on them (3 seeds, 300 events). Masked-patch
+self-supervised pretraining bought neither label efficiency (at the budgets previously tested;
+a matched-budget re-test is wired) nor robustness. All results regenerate from committed
+configs and one command per table.
 
 ## 1. Question and design principles
 
@@ -175,19 +177,48 @@ accurate model and, after a one-parameter post-hoc fit, also among the best cali
 
 ### 5.2 Robustness
 
-Noise, short-window, missing-channel, and domain-shift sweeps
-(`scripts/robustness_report.py`). Prior wiring-grade signal: the strongest in-distribution
-model degraded most under domain shift. Not yet run at research grade: the colab_standard,
-multi-seed version with both the augmented and `--no-augment` arms is wired
-(`make robustness-study`) and queued as follow-up work.
+Noise, short-window, missing-channel, and domain-shift sweeps at colab_standard, 3 seeds,
+both augmentation arms (`make robustness-full`; artifact:
+`reports/experiment_summaries/robustness_summary.json`). Four findings:
+
+1. **The transformer is the most accurate model and degrades least under domain shift.**
+   Under the domain-B regime it keeps macro-F1 0.49 ± 0.06 while the CNN collapses
+   (0.19 ± 0.02 unaugmented, 0.04 ± 0.01 augmented) and XGBoost drops to 0.27 ± 0.01. The
+   wiring-grade hint that the strongest model degrades most under shift did not survive proper
+   training — it was an artifact of an undertrained transformer.
+2. **But it degrades most under extreme in-distribution noise**: worst-case Gaussian-noise
+   delta 0.85 vs XGBoost's 0.59 (at σ = 0.2, ten times the training noise floor). Accuracy,
+   shift tolerance, and noise tolerance rank the models differently — no single model wins
+   every corruption type.
+3. **The train-on-probe concern resolved asymmetrically.** Channel-dropout augmentation
+   clearly flatters the CNN's missing-channel delta (0.54 augmented vs 0.75 unaugmented) but
+   not the transformer's (0.42 ± 0.10 vs 0.32 ± 0.03, overlapping intervals) — the
+   architecture, not the augmentation, carries its channel-loss tolerance.
+4. **Temperature scaling does not survive domain shift** (a negative result worth stating): a
+   temperature fitted on clean validation logits *worsens* shifted ECE for every deep model
+   (transformer 0.24 → 0.38; CNN 0.46 → 0.62 unaugmented). Post-hoc calibration is an
+   in-distribution tool; recalibrate after shift or use shift-aware methods.
+
+Pretraining bought no robustness: pretrained-vs-scratch deltas are +0.00 to +0.04 across arms
+and conditions.
 
 ### 5.3 Interpretability
 
 Attribution maps are scored against the generator's ground-truth event windows
-(`localization_score`) with a random-placement baseline — not eyeballed. Prior wiring-grade
-finding, consistent with Jain & Wallace (2019): integrated gradients localized above chance;
-attention pooling weights did not. The properly-trained (colab_standard) re-measurement is
-queued as follow-up work; the wiring-grade result should be read as a method demonstration.
+(`localization_score`) with a random-placement baseline — not eyeballed. At colab_standard
+(3 seeds, properly trained transformers at macro-F1 0.871 ± 0.006, 300 pooled test events;
+artifact: `interpretability_summary.json`):
+
+| Saliency | Localization | Random baseline |
+| --- | ---: | ---: |
+| integrated gradients | **0.483 ± 0.033** | 0.103 ± 0.009 |
+| attention pooling | 0.110 ± 0.015 | 0.103 ± 0.009 |
+
+Integrated gradients concentrates nearly five times the chance-level mass on the injected
+event; attention-pooling weights are statistically indistinguishable from random placement.
+The wiring-grade version of this result survived proper training and sharpened — consistent
+with Jain & Wallace (2019), attention weights are not an explanation here, and the claim now
+rests on trained models and seed-level statistics rather than a 27-sample demonstration.
 
 ## 6. Negative and null results
 
@@ -196,11 +227,21 @@ queued as follow-up work; the wiring-grade result should be read as a method dem
   fine-tuned at a lower learning rate for fewer epochs — means the honest verdict is "no help at
   this budget," not "does not transfer." The sweep now selects each arm's learning rate from the
   same validation budget, and the matched re-run is queued as follow-up work.
-- **Attention is not an explanation** here: pooling weights localized events below the random
-  baseline in the wiring-grade run.
+- **Attention is not an explanation** here: at trained scale, pooling weights localize events
+  at chance level (0.110 ± 0.015 vs random 0.103 ± 0.009) while integrated gradients reach
+  0.483 (§5.3).
+- **Temperature scaling fails under domain shift**: a temperature fitted on clean validation
+  logits worsens shifted ECE for every deep model (§5.2). The calibration win in §5.1 is an
+  in-distribution result only.
 - **The transformer's small-data weakness is per-class, not wholesale.** The earlier claim that
   it loses outright at 2k did not survive training parity (§4.2); what remains true is that its
   advantage on structural classes (`regime_shift`, `sensor_dropout`) inverts to a deficit at 2k.
+- **An honest agent session found nothing to claim.** At a bounded budget (guardrail:
+  1,500 samples, 15 epochs, 3 seeds) the planner's three one-variable ablations (dropout 0.2,
+  d_model 192, 6 layers) all *reduced* mean macro-F1 vs the 0.680 ± 0.006 baseline; after Holm
+  correction the reviewer reported three `no_change` verdicts and zero improvements — matching
+  the proposals' own pre-registered failure modes (`agentic_ablation_colab.md`). The
+  demonstrated capability is the discipline, not a discovery.
 
 ## 7. Threats to validity
 

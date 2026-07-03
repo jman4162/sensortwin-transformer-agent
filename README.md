@@ -42,10 +42,16 @@ The headline finding and the dataset, in two pictures (regenerate with `python -
 Where the 20k gain lives (per-class deltas vs the strongest baseline, Holm-corrected), and a
 saliency check against the generator's ground truth:
 
-| Per-class gain | Saliency vs truth |
+| Per-class gain | Where the errors remain |
 | --- | --- |
-| ![Per-class delta](docs/figures/perclass_delta.png) | ![Saliency overlay](docs/figures/saliency_overlay.png) |
-| Transformer − CNN F1 per class at 20k. The largest gains are the structure/cross-channel classes (`sensor_dropout` +0.35, `correlated_channel_fault` +0.20); trend classes show none. | Integrated-gradients attribution vs the true event span (quick-scale illustration; attention ≠ explanation, see the model card). |
+| ![Per-class delta](docs/figures/perclass_delta.png) | ![Confusion matrix](docs/figures/confusion_matrix.png) |
+| Transformer − CNN F1 per class at 20k. The largest gains are the structure/cross-channel classes (`sensor_dropout` +0.35, `correlated_channel_fault` +0.20); trend classes show none. | Trained-transformer test confusion (20k): residual confusion sits exactly on the shortcut-hardened classes, `sensor_dropout` and `correlated_channel_fault` vs `normal`. |
+
+![Saliency overlay](docs/figures/saliency_overlay.png)
+
+*Integrated-gradients attribution vs the true event span. At trained scale, IG concentrates
+~5× chance-level mass on the injected event while attention-pooling weights sit at chance
+(0.110 vs random 0.103) — attention ≠ explanation; see the model card.*
 
 ## Quickstart
 
@@ -241,7 +247,8 @@ Holm-corrected per-class deltas. It writes the committable
 | v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **wired, CI-tested on a fixture; not yet run on the real download** |
 | v0.7 | Agentic experiment runner + Colab GPU readiness | **done** |
 | v0.8 | Fairness overhaul: training parity, hardened generator, paired statistics, 5-seed re-run | **done** |
-| next | Matched-budget label-efficiency + robustness re-runs at 20k; C-MAPSS studies on the real download | open |
+| v0.9 | Research-grade robustness (both arms), interpretability, calibration, and agent session at 20k, all with committed artifacts | **done** |
+| next | Matched-budget label-efficiency re-run (Colab notebook 06); C-MAPSS studies on the real download; `make tune` at scale | open |
 
 ## License
 
