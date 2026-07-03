@@ -6,6 +6,48 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-03 — tuned-recipe check: the shared recipe was worth +0.06 to the transformer
+
+**Question.** The fair headline used one shared recipe for every deep model — parity by
+construction, but possibly parity in the transformer's favor, since the shared recipe is the
+transformer's spec default. How much of the +0.09 margin is recipe rather than architecture?
+
+**Setup.** `make tune`: identical lr {3e-4, 1e-3, 3e-3} × capacity {base, large} grid per deep
+model, selected on validation macro-F1 only (colab_standard, seed 0, 30 epochs). Then the 5-seed
+headline protocol re-run with each model at its selected cell
+(`compare_models --model-config-dir configs/models/tuned`; per-seed checkpoints carry a recipe
+fingerprint so configs changes can never silently reuse stale results). Artifacts:
+`tune_{cnn,lstm,transformer}/tuning_results.md`, `tuned/headline_comparison.json`.
+
+**Result — the grid.** The transformer selects its own committed cell (lr 1e-3, 815k; the 1.8M
+variant is worse at every LR). The baselines select stronger cells: cnn lr 3e-3 at 211k
+(val 0.825 vs 0.781 shared), lstm lr 1e-3 at 539k (val 0.730 vs 0.519 — the base config was
+undersized).
+
+**Result — tuned 5-seed comparison (test macro-F1).** transformer 0.867 ± 0.009 > cnn
+0.832 ± 0.005 > xgboost 0.704 > logreg 0.649 > random_forest 0.641 > lstm 0.560 ± 0.010.
+Transformer vs tuned cnn: **Δ = +0.03, 95% t-interval [+0.03, +0.04], p < 0.001**, ahead on all
+five seeds. Holm-surviving per-class gains: `sensor_dropout` +0.22, `normal` +0.03,
+`regime_shift` +0.02, `voltage_sag` +0.02, `compound_fault` +0.02. `correlated_channel_fault`
+falls to +0.02 and loses Holm significance — the 211k CNN recovers most of the cross-channel
+class.
+
+**Interpretation.** Roughly two thirds of the +0.09 shared-recipe margin was recipe, one third
+is architecture. What survives per-model tuning is specific: frozen-channel detection
+(`sensor_dropout`) and small but consistent gains on the step/composite classes. The
+cross-channel-attention story weakens — given enough capacity, convolutions plus benign-activity
+context get most of the way there. Both protocols stay committed and quoted for different
+questions: shared-recipe for equal-budget behavior, tuned for architecture comparison.
+
+**Caveats.** Grid selection used one seed at one scale; the tuned run's transformer mean differs
+from the shared run's (0.867 vs 0.861, same recipe) because per-model RNG streams depend on the
+models trained earlier in the loop — within-run paired comparisons are unaffected.
+
+**Next.** Matched-budget label-efficiency (Colab notebook 06) and C-MAPSS on the real download
+remain the last open evidence items.
+
+---
+
 ## 2026-07-03 — robustness, interpretability, and an agent session at research grade
 
 **Question.** Three claims in the model card rested on wiring-grade runs: how models degrade

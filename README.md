@@ -145,6 +145,15 @@ temperature fit on validation (T = 0.64 ± 0.01, `make calibration`) cuts its te
 0.016 ± 0.005 with zero predictions changed (3 seeds; see the
 [model card](reports/model_card.md)).
 
+**Does the shared recipe favor the transformer? Yes — by a measured amount.** A shared
+lr × capacity grid (`make tune`) selects the shared recipe's own cell for the transformer but
+stronger cells for the baselines (CNN 211k @ lr 3e-3 → 0.832 ± 0.005). With every model at its
+grid optimum the margin narrows to **+0.03** (95% t-interval [+0.03, +0.04], p < 0.001, wins
+all 5 seeds), driven almost entirely by `sensor_dropout` (+0.22); the properly sized CNN
+recovers most of the cross-channel class. Both protocols are committed
+([`tuned/headline_comparison.json`](reports/experiment_summaries/tuned/headline_comparison.json));
+quote the tuned number when comparing architectures.
+
 ### Small-scale contrast (2k, same protocol, 5 seeds)
 
 | Model | Macro-F1 | ECE |
@@ -248,7 +257,8 @@ Holm-corrected per-class deltas. It writes the committable
 | v0.7 | Agentic experiment runner + Colab GPU readiness | **done** |
 | v0.8 | Fairness overhaul: training parity, hardened generator, paired statistics, 5-seed re-run | **done** |
 | v0.9 | Research-grade robustness (both arms), interpretability, calibration, and agent session at 20k, all with committed artifacts | **done** |
-| next | Matched-budget label-efficiency re-run (Colab notebook 06); C-MAPSS studies on the real download; `make tune` at scale | open |
+| v0.10 | Shared tuning grid + tuned-recipe headline check (the +0.09 → +0.03 decomposition) | **done** |
+| next | Matched-budget label-efficiency re-run (Colab notebook 06); C-MAPSS studies on the real download | open |
 
 ## License
 

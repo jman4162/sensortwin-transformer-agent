@@ -94,6 +94,11 @@ well-calibrated after a one-parameter fit — **in distribution only**: the same
   structure/cross-channel classes (`sensor_dropout` +0.35, `correlated_channel_fault` +0.20).
   An earlier claim that it was far behind at 2k (0.435) came from baselines trained without its
   recipe and is superseded (research log, 2026-07-02).
+- **Per-model tuning shrinks the margin to +0.03** (tuned-recipe check, 5 seeds: transformer
+  0.867 ± 0.009 vs grid-tuned 211k CNN 0.832 ± 0.005; still significant, wins every seed). The
+  remaining reliable advantage is almost entirely `sensor_dropout` (+0.22); the tuned CNN
+  recovers most of `correlated_channel_fault`. Quote +0.03, not +0.09, when the question is
+  architecture rather than shared-budget behavior.
 - Masked-pretraining **did not improve label efficiency** at `colab_standard` (1 seed, reduced
   budget): pretrained-then-fine-tuned trailed from-scratch at every label fraction and the frozen
   linear probe was near-useless. This is confounded by a lower fine-tune learning rate / short

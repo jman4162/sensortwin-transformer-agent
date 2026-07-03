@@ -10,10 +10,12 @@ baselines? We built a deterministic 8-channel physics-inspired generator with 10
 trained six models under one shared training recipe, and compared them at two dataset scales with
 paired statistics over 5 seeds. At 20k samples the transformer reaches macro-F1 0.861 ± 0.010
 versus 0.774 ± 0.010 for the strongest baseline (a CNN trained with the identical recipe):
-Δ = +0.09, 95% CI [+0.06, +0.11], paired p = 0.001. The gain concentrates where the
-architecture's inductive bias predicts: the largest Holm-surviving per-class deltas are
-`sensor_dropout` (+0.35), the marginal-preserving cross-channel fault (+0.20), and
-`regime_shift` (+0.10), while trend classes show no advantage. The transformer is also the worst
+Δ = +0.09, 95% CI [+0.06, +0.11], paired p = 0.001. A shared tuning grid then revealed that the
+shared recipe is the transformer's own optimum while under-serving the baselines; with every
+model at its grid-selected cell the margin narrows to +0.03 [+0.03, +0.04] — still significant
+on all five seeds, and driven almost entirely by frozen-channel detection (`sensor_dropout`
++0.22), while a properly sized CNN recovers most of the cross-channel fault class. Trend
+classes show no transformer advantage under either protocol. The transformer is also the worst
 calibrated of the accurate models (ECE 0.087; one temperature parameter fixes this
 in-distribution but not under shift), the most robust to domain shift, and the least robust to
 extreme noise. Attention-pooling weights localize injected events at chance level while
@@ -164,6 +166,32 @@ models are the two worst-calibrated among the supervised set (CNN ECE 0.135, tra
 while logistic regression is nearly calibrated out of the box (0.018). Temperature scaling
 (§5.1) addresses this post hoc.
 
+### 4.3 Tuned-recipe check: does the shared recipe favor the transformer?
+
+It does, and the size of the favor is now measured. A shared lr × capacity grid
+(`make tune`, selection on validation macro-F1 only) picked the shared recipe's own cell for
+the transformer (lr 1e-3, 815k — the 1.8M variant is worse at every LR) but different cells
+for the baselines: CNN lr 3e-3 at 211k, LSTM lr 1e-3 at 539k. Re-running the 5-seed comparison
+with each model at its selected cell (`configs/models/tuned/`; artifact:
+`tuned/headline_comparison.json`):
+
+| Model | Shared recipe | Grid-selected recipe |
+| --- | ---: | ---: |
+| transformer | 0.861 ± 0.010 | 0.867 ± 0.009 |
+| cnn | 0.774 ± 0.010 | 0.832 ± 0.005 |
+| lstm | 0.507 ± 0.023 | 0.560 ± 0.010 |
+
+Against the tuned CNN the transformer's margin narrows from +0.09 to **+0.03 macro-F1**
+(95% t-interval [+0.03, +0.04], paired p < 0.001) — smaller, still significant, and the
+transformer wins on all five seeds. The composition of the gain changes too: `sensor_dropout`
+stays large (+0.22, Holm-significant) while the `correlated_channel_fault` advantage mostly
+closes (+0.02, not Holm-significant) — a properly sized CNN recovers most of the cross-channel
+class. The honest headline is therefore: **the transformer's reliable advantage under
+per-model tuning is +0.03 overall, driven almost entirely by frozen-channel detection.**
+(Transformer means differ slightly between the two runs at the same recipe because each
+model's RNG stream depends on the models trained before it within a seed; the paired
+within-run comparisons are unaffected.)
+
 ## 5. Beyond accuracy
 
 ### 5.1 Calibration
@@ -252,9 +280,11 @@ rests on trained models and seed-level statistics rather than a 27-sample demons
 - **Residual separability.** Hardening closed the shortcuts we found (giveaway channel,
   inactive `normal`, variance-inflating "invisible" fault); others may remain. The signature
   tests document what is asserted, not everything that is true.
-- **Shared recipe rather than per-model tuning.** Parity is by construction (one shared recipe), which could
-  favor the model the recipe was designed around (the transformer). The shared grid
-  (`make tune`) bounds this concern but was selected on validation macro-F1 at one scale.
+- **Shared recipe rather than per-model tuning.** Measured, no longer hypothetical (§4.3): the
+  shared recipe is the transformer's own grid optimum and under-serves the baselines; per-model
+  tuning shrinks the headline margin from +0.09 to +0.03. Both protocols are reported; quote
+  the tuned number when comparing architectures and the shared-recipe number when comparing
+  under one budget. The grid itself used one seed and one scale for selection.
 - **Seed budget.** n=5 paired seeds detects deltas roughly ≥ 1.5 pooled standard deviations;
   smaller real effects will read as "not significant."
 - **One data regime per claim.** Random splits of i.i.d. samples; no temporal drift between
