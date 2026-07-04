@@ -163,6 +163,18 @@ either, and the sklearn/xgboost models use `n_jobs=1`. Keep these when adding co
   grid), `make full-reproduction`, `requirements-lock.txt`, `CITATION.cff`,
   `docs/{glossary,tutorial_guide}.md`, `reports/paper_style_report.md`. The headline numbers in
   README/model_card must always trace to the committed `headline_comparison.json`.
+- **v0.9–v0.11 (2026-07-03/04) — all studies at research grade.** Every claim in the public docs
+  now traces to a committed `*_summary.{json,md}` artifact. Key results: robustness (transformer
+  degrades least under shift, most under extreme noise; temperature scaling FAILS under shift);
+  interpretability (IG localizes at 0.483 vs random 0.103; attention at chance — 3 seeds);
+  honest-null agent session (`agentic_ablation_colab.md`); tuned-recipe check (per-model grid
+  optima shrink the headline +0.09 → +0.03, `configs/models/tuned/`, `tuned/headline_comparison.json`
+  — quote +0.03 for architecture comparisons); C-MAPSS on the real download (xgboost 0.899 beats
+  transformer 0.869 on real data; sim2real transfer is a null, p ≥ 0.42). compare_models
+  checkpoints carry a recipes-sha256 fingerprint. Two latent v0.6 bugs fixed + regression-tested:
+  C-MAPSS mode overrides never reached the data block (`load_cmapss_data_cfg`), and the sim2real
+  xgboost arm crashed on C=14. Raw C-MAPSS hashes pinned in `configs/data/cmapss.yaml`. Remaining
+  open evidence item: matched-budget label-efficiency (Colab notebook 06).
 
 CI (`.github/workflows/ci.yml`) runs a fast `lint` job (core+dev: ruff/black/mypy) and a `test` job
 (installs `ml` extra so baselines/metrics are exercised) on Python 3.10 + 3.12. Library submodules
