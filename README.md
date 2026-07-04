@@ -176,29 +176,32 @@ number came from training the baselines without the transformer's recipe and is 
 the research log entry of 2026-07-02). The §17 ablations (patch size, channel embedding,
 pooling) run via `make ablate`.
 
-## Real-data validation (v0.6)
+## Real-data validation: NASA C-MAPSS
 
-The synthetic numbers above are a controlled testbed, not evidence of real-world performance. v0.6
-runs the same pipeline on **NASA C-MAPSS** turbofan data — 14 informative sensors, reframed as
-3-stage health classification (healthy / degrading / critical) by binning remaining-useful-life. The
-raw files are a US-government work (NASA PCoE) and are not committed; download them and point
-`--raw-dir` at the folder:
+The synthetic numbers above are a controlled testbed; the honest check is real turbofan data.
+Run on FD001+FD003 (6,076 windows, 200 engines, **grouped-by-engine** splits, 3 seeds, shared
+deep recipe, raw inputs SHA-256-pinned). Two findings, both committed
+([`cmapss_summary.json`](reports/experiment_summaries/cmapss_summary.json),
+[`sim2real_summary.json`](reports/experiment_summaries/sim2real_summary.json)):
+
+- **The synthetic ranking does not port.** From scratch on real data:
+  **xgboost 0.899 ± 0.007** > transformer 0.869 ± 0.006 > cnn 0.808 ± 0.041 macro-F1 — and
+  XGBoost is also the best calibrated and the most noise-tolerant. The transformer's advantage
+  is conditional on temporal/cross-channel structure being the discriminating signal; on this
+  real task, engineered features carry it.
+- **Synthetic pretraining does not transfer.** Under matched per-arm LR budgets the
+  synthetic-pretrained encoder gains +0.004 to +0.017 over scratch across engine fractions
+  (never significant, p ≥ 0.42), and the real-pretrained control is no better than scratch.
 
 ```bash
-python -m scripts.fetch_cmapss --raw-dir /path/to/CMAPSSData --mode quick_demo
-python -m scripts.real_data_report --data data/cmapss_FD001 --mode quick_demo   # baselines on real data
-python -m scripts.sim2real_transfer --data data/cmapss_FD001 --mode quick_demo  # synthetic->real transfer
+python -m scripts.fetch_cmapss --raw-dir /path/to/CMAPSSData --mode full   # verifies pinned hashes
+python -m scripts.real_data_report --raw-dir /path/to/CMAPSSData --mode full --epochs 30 --seeds 0 1 2
+python -m scripts.sim2real_transfer --raw-dir /path/to/CMAPSSData --mode full --seeds 0 1 2
 ```
 
-The split is **grouped by engine** (no engine's windows cross train/test). `sim2real_transfer`
-pretrains the masked-patch encoder on synthetic data and transfers the channel-agnostic *temporal*
-encoder to C-MAPSS (the 8→14 channel mismatch means the channel embedding is re-learned), against a
-real-pretrained upper bound and a from-scratch lower bound.
-
-- **Supported:** the synthetic-data pipeline (windowing, features, model classes, evaluation) runs
-  on real sensor data, and models can be ranked on it.
-- **Not claimed:** these are not state-of-the-art RUL estimates; the 3-stage binning is a deliberate
-  classification reframing, and only the temporal encoder (not channel identity) transfers.
+The raw files are a US-government work (NASA PCoE, via data.nasa.gov) and are not committed.
+Not claimed: state-of-the-art RUL estimation — the 3-stage binning is a deliberate
+classification reframing.
 
 ## Agentic experiment runner (v0.7)
 
@@ -253,12 +256,12 @@ Holm-corrected per-class deltas. It writes the committable
 | v0.3 | `SensorPatchTST` classifier + ablations | **done** |
 | v0.4 | Masked-patch pretraining, label-efficiency | **done** |
 | v0.5 | Robustness, calibration, interpretability + model card | **done** |
-| v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **wired, CI-tested on a fixture; not yet run on the real download** |
+| v0.6 | NASA C-MAPSS open-data adaptation + synthetic→real transfer | **done — run on the real download (v0.11): features win, transfer is null** |
 | v0.7 | Agentic experiment runner + Colab GPU readiness | **done** |
 | v0.8 | Fairness overhaul: training parity, hardened generator, paired statistics, 5-seed re-run | **done** |
 | v0.9 | Research-grade robustness (both arms), interpretability, calibration, and agent session at 20k, all with committed artifacts | **done** |
 | v0.10 | Shared tuning grid + tuned-recipe headline check (the +0.09 → +0.03 decomposition) | **done** |
-| next | Matched-budget label-efficiency re-run (Colab notebook 06); C-MAPSS studies on the real download | open |
+| next | Matched-budget label-efficiency re-run (Colab notebook 06) — the last open evidence item | open |
 
 ## License
 

@@ -6,6 +6,46 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-04 — C-MAPSS for real: features win on real data, pretraining does not transfer
+
+**Question.** The two v0.6 questions, finally answered on the actual download instead of a
+fixture: does the synthetic model ranking port to real turbofan data, and does masked-patch
+pretraining on the generator transfer?
+
+**Setup.** FD001+FD003 at `--mode full` (6,076 windows, 200 engines, 14 sensors, T=48), RUL
+binned to 3 health stages, grouped-by-engine splits reseeded per seed, 3 seeds, both deep models
+on one recipe, raw files verified against pinned SHA-256s. Transfer arms select LR from a shared
+two-point validation budget. Artifacts: `cmapss_summary.json`, `sim2real_summary.json`.
+
+**Result — from scratch.** xgboost **0.899 ± 0.007** > transformer 0.869 ± 0.006 > cnn
+0.808 ± 0.041 macro-F1. XGBoost is also best calibrated (ECE 0.047 vs transformer 0.106) and
+degrades least under noise (worst-Δ 0.066 vs 0.229). The synthetic ordering does not port.
+
+**Result — transfer (null).** synth-pretrained − scratch: +0.011 / +0.013 / +0.017 / +0.004 at
+10/25/50/100% of training engines, p ≥ 0.42 everywhere; the real-pretrained control does not
+beat scratch either. Third pretraining null (after synthetic label-efficiency and robustness).
+
+**Interpretation.** The transformer's advantage is conditional, and the conditions are now
+mapped: it wins where temporal/cross-channel *structure* is the discriminating signal
+(synthetic `sensor_dropout`, `regime_shift`) and loses to engineered features where summary
+statistics suffice — which includes this real health-staging task. That is a sharper answer to
+"when do transformer inductive biases help" than a synthetic-only win would have been.
+
+**Bugs the first real run surfaced (both fixed + regression-tested).** (1) The `full` mode's
+subset/stride overrides never reached the nested data block — every prior "full" invocation
+silently ran FD001 at the default stride; caught because the first artifact reported the wrong
+subset. (2) The sim2real xgboost arm crashed on the 14-channel width (feature names defaulted
+to the 8 synthetic channels) — hidden until now because that arm had never executed on real
+data, and an earlier smoke test piped through `tail`, masking the exit code. Unexecuted
+evaluation code is an unverified claim.
+
+**Caveats.** One dataset, one reframing (classification, not RUL regression); FD002/FD004
+(multi-condition) deferred; 3 seeds; no per-model tuning grid on the real task.
+
+**Next.** Matched-budget label-efficiency (Colab notebook 06) is the last open evidence item.
+
+---
+
 ## 2026-07-03 — tuned-recipe check: the shared recipe was worth +0.06 to the transformer
 
 **Question.** The fair headline used one shared recipe for every deep model — parity by

@@ -34,23 +34,28 @@ lets us test controlled hypotheses" — it is not real-world validation. v0.6 ad
 (§6); the synthetic headline numbers still carry this caveat.
 
 ## 6. Open-data validation
-Implemented in v0.6 on **NASA C-MAPSS** turbofan data (14 informative sensors), reframed as 3-stage
-health classification (healthy / degrading / critical) by binning remaining-useful-life, with a
-grouped-by-engine split so no engine's windows cross train/test. Two studies ship:
+Run on **NASA C-MAPSS** turbofan data (FD001+FD003, 14 informative sensors, 6,076 windows,
+200 engines), reframed as 3-stage health classification (healthy / degrading / critical) by
+binning remaining-useful-life, with grouped-by-engine splits (reseeded per seed) so no engine's
+windows cross train/test. 3 seeds, both deep models on one recipe; raw inputs SHA-256-pinned.
+Artifacts: `cmapss_summary.json`, `sim2real_summary.json`.
 
-- `scripts/real_data_report.py` runs the same slate (XGBoost-features, CNN, SensorPatchTST) **from
-  scratch on real data** with the same metrics and robustness sweeps — does the harness and the
-  synthetic finding port?
-- `scripts/sim2real_transfer.py` pretrains the masked-patch encoder on synthetic data and transfers
-  the channel-agnostic *temporal* encoder to C-MAPSS (synthetic C=8 → real C=14, so the channel
-  embedding is re-initialized), against a real-pretrained upper bound and a from-scratch lower bound.
+- **The synthetic ordering does not port to real data.** From scratch on C-MAPSS:
+  XGBoost-on-features **0.899 ± 0.007** > transformer 0.869 ± 0.006 > CNN 0.808 ± 0.041
+  macro-F1. XGBoost is also the best calibrated (ECE 0.047) and degrades least under noise.
+  The transformer's synthetic-benchmark advantage is conditional, not general — on this real
+  task engineered features win.
+- **Synthetic pretraining does not transfer.** With matched per-arm LR budgets, the
+  synthetic-pretrained encoder beats scratch by +0.004 to +0.017 across engine fractions —
+  never significant (paired p ≥ 0.42) — and the real-pretrained control is no better than
+  scratch either. Masked-patch pretraining buys nothing here, consistent with its synthetic
+  label-efficiency and robustness nulls.
 
-**Claimed:** the synthetic pipeline runs on real sensor data and the models can be ranked there.
-**Not claimed:** state-of-the-art RUL/health estimation (C-MAPSS is natively a regression benchmark;
-the 3-stage binning is a deliberate classification reframing), or full encoder transfer (only the
-temporal patch encoder transfers across the channel-count change). The raw C-MAPSS files are a
-US-government work and are not redistributed here; run the studies after downloading them, and at
-`--mode full` for research-grade numbers rather than the quick-mode wiring figures.
+**Claimed:** the pipeline runs on real sensor data with seed-level error bars, and the honest
+answer is that features+GBM lead there. **Not claimed:** state-of-the-art RUL/health estimation
+(the 3-stage binning is a deliberate classification reframing). The raw C-MAPSS files are a
+US-government work and are not redistributed; `fetch_cmapss` verifies your download against the
+pinned hashes.
 
 ## 7. Metrics
 Headline metric is **macro-F1** (classes are imbalanced); also report weighted-F1, per-class

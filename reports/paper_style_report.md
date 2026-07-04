@@ -19,10 +19,13 @@ classes show no transformer advantage under either protocol. The transformer is 
 calibrated of the accurate models (ECE 0.087; one temperature parameter fixes this
 in-distribution but not under shift), the most robust to domain shift, and the least robust to
 extreme noise. Attention-pooling weights localize injected events at chance level while
-integrated gradients concentrate ~5× chance mass on them (3 seeds, 300 events). Masked-patch
-self-supervised pretraining bought neither label efficiency (at the budgets previously tested;
-a matched-budget re-test is wired) nor robustness. All results regenerate from committed
-configs and one command per table.
+integrated gradients concentrate ~5× chance mass on them (3 seeds, 300 events). On real data
+(NASA C-MAPSS, grouped-by-engine, 3 seeds) the synthetic ranking does not port:
+XGBoost-on-features leads at 0.899 ± 0.007 vs the transformer's 0.869 ± 0.006. Masked-patch
+self-supervised pretraining bought nothing anywhere it was tested — no label efficiency (at the
+budgets previously tested; a matched-budget re-test is wired), no robustness, and no
+synthetic-to-real transfer (gain over scratch +0.004 to +0.017, p ≥ 0.42). All results
+regenerate from committed configs and one command per table.
 
 ## 1. Question and design principles
 
@@ -248,7 +251,34 @@ The wiring-grade version of this result survived proper training and sharpened �
 with Jain & Wallace (2019), attention weights are not an explanation here, and the claim now
 rests on trained models and seed-level statistics rather than a 27-sample demonstration.
 
-## 6. Negative and null results
+## 6. Real-data validation: NASA C-MAPSS
+
+The synthetic benchmark controls the data-generating process; C-MAPSS tests whether anything
+learned there survives contact with real turbofan sensors. Setup: FD001+FD003 (6,076 windows,
+200 engines, 14 sensors, T=48), RUL binned to 3 health stages, grouped-by-engine splits
+reseeded per seed, 3 seeds, one shared deep recipe, raw inputs SHA-256-pinned. Artifacts:
+`cmapss_summary.json`, `sim2real_summary.json`.
+
+**From scratch, features win on real data.** XGBoost-on-features reaches macro-F1
+**0.899 ± 0.007** vs the transformer's 0.869 ± 0.006 and the CNN's 0.808 ± 0.041 — and XGBoost
+is also the best calibrated (ECE 0.047 vs 0.106) and degrades least under added noise (worst-Δ
+0.066 vs 0.229). The synthetic ranking does not port: the transformer's advantage is specific
+to regimes where temporal/cross-channel structure is the discriminating signal, and on this
+real task summary statistics carry more of it.
+
+**Synthetic pretraining does not transfer.** With every arm selecting its LR from the same
+validation budget, the synthetic-pretrained encoder's gain over scratch is +0.004 to +0.017
+across engine fractions (paired p ≥ 0.42 everywhere), and the real-pretrained control is no
+better than scratch. Together with the synthetic label-efficiency and robustness nulls, the
+consistent conclusion is that masked-patch pretraining, as configured here, does not help this
+model family at these scales — on synthetic or real data.
+
+Running these studies for the first time also surfaced two latent defects in "wired but never
+run" code (a mode-override bug that silently ran `full` as FD001-at-default-stride, and a
+feature-name crash on the real channel count), both now fixed with regression tests — a
+concrete argument for treating unexecuted evaluation paths as unverified claims.
+
+## 7. Negative and null results
 
 - **Masked-patch pretraining did not improve label efficiency** at the budgets tested
   (1/5/10/100% labels, single seed, generator v1). A known confound — the pretrained arms
@@ -271,7 +301,7 @@ rests on trained models and seed-level statistics rather than a 27-sample demons
   the proposals' own pre-registered failure modes (`agentic_ablation_colab.md`). The
   demonstrated capability is the discipline, not a discovery.
 
-## 7. Threats to validity
+## 8. Threats to validity
 
 - **Synthetic data.** The generator is physics-inspired, not physics. Models may exploit
   regularities of the simulator that do not exist in real systems; the C-MAPSS pipeline
@@ -290,7 +320,7 @@ rests on trained models and seed-level statistics rather than a 27-sample demons
 - **One data regime per claim.** Random splits of i.i.d. samples; no temporal drift between
   train and test except in the explicit domain-shift study.
 
-## 8. Reproducibility
+## 9. Reproducibility
 
 - One command per table: `make headline`, `make tune`, `make robustness-study`,
   `make label-efficiency`, `make interpretability`, `make agent`.
