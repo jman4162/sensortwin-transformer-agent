@@ -20,7 +20,7 @@ from collections import Counter
 from pathlib import Path
 
 from sensortwin.data.cmapss import load_cmapss, load_cmapss_subsets
-from sensortwin.utils.config import load_mode_config
+from sensortwin.utils.config import load_cmapss_data_cfg, load_mode_config
 from sensortwin.utils.io import save_dataset
 
 
@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> None:
     args = p.parse_args(argv)
 
     full_cfg = load_mode_config(args.config, mode=args.mode)
-    cfg = full_cfg.get("data", {})
+    cfg = load_cmapss_data_cfg(args.config, mode=args.mode)
     subsets = [s.strip() for s in str(cfg.get("subset", "FD001")).split(",") if s.strip()]
     raw_hashes = _hash_raw_files(args.raw_dir, subsets, full_cfg.get("raw_sha256") or {})
     kwargs = {

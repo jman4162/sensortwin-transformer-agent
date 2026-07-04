@@ -45,7 +45,7 @@ from sensortwin.evaluation.robustness import (
 )
 from sensortwin.features import build_feature_matrix
 from sensortwin.models.baselines import feature_importance, make_xgboost
-from sensortwin.utils.config import load_mode_config
+from sensortwin.utils.config import load_cmapss_data_cfg, load_mode_config
 from sensortwin.utils.io import load_dataset
 from sensortwin.utils.seeds import set_torch_seed
 
@@ -200,7 +200,7 @@ def _run_deep(
 
 
 def _load_data(args) -> tuple[np.ndarray, np.ndarray, dict]:
-    data_cfg = load_mode_config(args.config, mode=args.mode).get("data", {})
+    data_cfg = load_cmapss_data_cfg(args.config, mode=args.mode)
     if args.data:
         return load_dataset(args.data)
     if not args.raw_dir:
@@ -425,7 +425,7 @@ def main(argv: list[str] | None = None) -> None:
 
     meta_run = {
         "mode": args.mode,
-        "subsets": str(load_mode_config(args.config, mode=args.mode).get("data", {}).get("subset")),
+        "subsets": str(load_cmapss_data_cfg(args.config, mode=args.mode).get("subset")),
         "seeds": list(args.seeds),
         "epochs": args.epochs,
         "raw_sha256": meta.get("raw_sha256", {}),

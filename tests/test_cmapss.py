@@ -77,3 +77,18 @@ def test_load_cmapss_subsets_offsets_groups(tmp_path):
     # Engine ids from the second subset are offset so they do not collide with the first.
     assert len(set(groups)) == 4
     assert X.shape[0] == len(y) == len(groups)
+
+
+def test_cmapss_mode_overrides_reach_the_data_block():
+    """Regression: the `full` mode's subset/stride live at the mode's top level, but consumers
+    read the nested data block — load_cmapss_data_cfg must merge them. Before the fix every
+    'full' run silently used FD001 at the default stride."""
+    from sensortwin.utils.config import load_cmapss_data_cfg
+
+    full = load_cmapss_data_cfg("configs/data/cmapss.yaml", mode="full")
+    assert full["subset"] == "FD001,FD003"
+    assert full["stride"] == 6
+    quick = load_cmapss_data_cfg("configs/data/cmapss.yaml", mode="quick_demo")
+    assert quick["subset"] == "FD001"
+    assert quick["stride"] == 24
+    assert quick["window"] == 48  # nested data keys survive the merge

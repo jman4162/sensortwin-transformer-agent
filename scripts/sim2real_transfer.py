@@ -42,7 +42,7 @@ from sensortwin.evaluation.plots import plot_label_efficiency
 from sensortwin.features import build_feature_matrix
 from sensortwin.models.baselines import make_xgboost
 from sensortwin.simulation import GenConfig, generate_dataset
-from sensortwin.utils.config import load_mode_config
+from sensortwin.utils.config import load_cmapss_data_cfg, load_mode_config
 from sensortwin.utils.io import load_dataset
 from sensortwin.utils.seeds import set_torch_seed
 
@@ -70,7 +70,7 @@ def _engine_subset(groups: np.ndarray, idx: np.ndarray, fraction: float, rng) ->
 
 
 def _load_real(args) -> tuple[np.ndarray, np.ndarray, dict]:
-    data_cfg = load_mode_config(args.config, mode=args.mode).get("data", {})
+    data_cfg = load_cmapss_data_cfg(args.config, mode=args.mode)
     if args.data:
         return load_dataset(args.data)
     if not args.raw_dir:
@@ -381,7 +381,7 @@ def main(argv: list[str] | None = None) -> None:
 
     meta_run = {
         "mode": args.mode,
-        "subsets": str(load_mode_config(args.config, mode=args.mode).get("data", {}).get("subset")),
+        "subsets": str(load_cmapss_data_cfg(args.config, mode=args.mode).get("subset")),
         "seeds": list(args.seeds),
         "epochs_pretrain": args.epochs_pretrain,
         "epochs_finetune": args.epochs_finetune,

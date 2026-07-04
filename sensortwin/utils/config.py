@@ -47,6 +47,23 @@ def load_mode_config(path: str | Path, mode: str | None = None) -> dict[str, Any
     return raw
 
 
+def load_cmapss_data_cfg(path: str | Path, mode: str | None = None) -> dict[str, Any]:
+    """The ``data:`` block of a C-MAPSS config with mode overrides applied.
+
+    ``modes`` entries override *top-level* fields (``load_mode_config`` contract), but the
+    C-MAPSS data parameters live in the nested ``data:`` block — so mode-level keys that belong
+    there (``subset``, ``stride``, ...) are merged onto it here. Before this helper existed the
+    ``full`` mode's subset/stride overrides were silently ignored and every "full" run was
+    actually FD001 at the default stride.
+    """
+    full = load_mode_config(path, mode=mode)
+    data = dict(full.get("data", {}))
+    for k in ("subset", "channels", "window", "stride", "rul_bins", "rul_cap", "class_names"):
+        if k in full:
+            data[k] = full[k]
+    return data
+
+
 def load_synthetic_config(path: str | Path, mode: str | None = None) -> GenConfig:
     raw = load_yaml(path)
     modes = raw.pop("modes", {})
