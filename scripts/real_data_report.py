@@ -266,56 +266,19 @@ def _fmt(v: float | None) -> str:
     return "—" if v is None else f"{v:.3f}"
 
 
-def main(argv: list[str] | None = None) -> None:
-    p = argparse.ArgumentParser(description="Run the benchmark slate on real C-MAPSS data.")
-    p.add_argument("--data", default=None, help="processed .npz from scripts.fetch_cmapss")
-    p.add_argument("--raw-dir", default=None, help="raw C-MAPSS folder (build on the fly)")
-    p.add_argument("--config", default="configs/data/cmapss.yaml")
-    p.add_argument("--mode", default="quick_demo")
-    p.add_argument("--models", default=",".join(DEFAULT_MODELS))
-    p.add_argument("--epochs", type=int, default=20)
-    p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
-    p.add_argument("--out", default="reports/experiment_summaries")
-    args = p.parse_args(argv)
-
-    set_torch_seed(args.seed)
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    models = [m.strip() for m in args.models.split(",") if m.strip()]
-
-    X, y, meta = _load_data(args)
+def _run_one_seed(seed, X, y, meta, models, args, arch, deep_kwargs, out_dir):
+    """Grouped split + full slate for one seed; returns {model: metrics}."""
     class_names = meta["event_classes"]
     channel_names = meta.get("channel_names")
-    in_channels = X.shape[1]
-    print(
-        f"Loaded C-MAPSS: X={X.shape}, {len(class_names)} classes, "
-        f"{len(set(meta['groups']))} engines"
-    )
-
-    sp = make_split("grouped", y, meta, seed=args.seed)
+    set_torch_seed(seed)
+    sp = make_split("grouped", y, meta, seed=seed)
     tr, va, te = sp["train"], sp["val"], sp["test"]
     standardizer = ChannelStandardizer().fit(X[tr])
     Xte_raw = X[te]
 
-    full = load_mode_config(args.config, mode=args.mode)
-    arch = full.get("model", {})
-    train_block = full.get("train", {})
-    loop_keys = (
-        "optimizer",
-        "lr",
-        "weight_decay",
-        "label_smoothing",
-        "scheduler",
-        "warmup_epochs",
-        "batch_size",
-        "patience",
-    )
-    transformer_kwargs = {k: train_block[k] for k in loop_keys if k in train_block}
-
     results: dict[str, dict] = {}
     for name in models:
-        print(f"--- {name} ---")
+        print(f"--- [seed {seed}] {name} ---")
         if name == "xgboost":
             results[name] = _run_xgboost(
                 X[tr], y[tr], Xte_raw, y[te], channel_names, class_names, out_dir
@@ -323,10 +286,10 @@ def main(argv: list[str] | None = None) -> None:
         else:
             results[name] = _run_deep(
                 name,
-                in_channels,
+                X.shape[1],
                 len(class_names),
                 arch,
-                transformer_kwargs if name == "transformer" else {},
+                deep_kwargs,  # both deep models get the same recipe (parity)
                 standardizer.transform(X[tr]),
                 y[tr],
                 standardizer.transform(X[va]),
@@ -341,9 +304,138 @@ def main(argv: list[str] | None = None) -> None:
                 args.device,
             )
         print(f"  macro-F1={results[name]['macro_f1']:.3f}")
+    return results
 
-    report = _write_report(results, out_dir, meta, class_names)
-    print(f"\nReport written to {report}")
+
+_SUMMARY_KEYS = ("macro_f1", "ece")
+_DELTA_KEYS = (
+    ("noise", "noise_delta"),
+    ("short_window", "window_delta"),
+    ("missing_channel", "missing_delta"),
+)
+
+
+def _write_summary(per_seed, out_dir: Path, meta_run: dict, class_names) -> Path:
+    import json
+
+    from sensortwin.evaluation.statistics import mean_std
+
+    seeds = sorted(per_seed)
+    agg: dict[str, dict] = {}
+    for model in per_seed[seeds[0]]:
+        cells = {}
+        for key in _SUMMARY_KEYS:
+            vals = [per_seed[s][model][key] for s in seeds]
+            m, sd = mean_std(vals)
+            cells[key] = {"mean": m, "std": sd, "per_seed": vals}
+        for src, key in _DELTA_KEYS:
+            vals = [per_seed[s][model][src]["worst_delta"] for s in seeds]
+            m, sd = mean_std(vals)
+            cells[key] = {"mean": m, "std": sd, "per_seed": vals}
+        agg[model] = cells
+    (out_dir / "cmapss_summary.json").write_text(
+        json.dumps({"meta": meta_run, "models": agg}, indent=2) + "\n"
+    )
+
+    def _f(c):
+        sd = c["std"]
+        return f"{c['mean']:.3f}" if np.isnan(sd) else f"{c['mean']:.3f} ± {sd:.3f}"
+
+    lines = [
+        "# C-MAPSS real-data summary",
+        "",
+        f"Mode `{meta_run['mode']}`, subsets {meta_run['subsets']}, seeds {meta_run['seeds']}, "
+        f"{meta_run['epochs']} epochs; grouped-by-engine splits (reseeded per seed; no engine "
+        "crosses train/test); mean ± sample std over seeds. Both deep models train with the same "
+        f"recipe from `configs/data/cmapss.yaml`. {len(class_names)}-stage health classification "
+        f"({' / '.join(class_names)}) — a deliberate reframing of the native RUL-regression task.",
+        "",
+        "| Model | Macro-F1 | ECE | Noise Δ | Short-win Δ | Missing-ch Δ |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for model, c in sorted(agg.items(), key=lambda kv: -kv[1]["macro_f1"]["mean"]):
+        lines.append(
+            f"| {model} | {_f(c['macro_f1'])} | {_f(c['ece'])} | {_f(c['noise_delta'])} | "
+            f"{_f(c['window_delta'])} | {_f(c['missing_delta'])} |"
+        )
+    lines += [
+        "",
+        "- **Supported:** the synthetic-benchmark pipeline runs on real turbofan sensors and the "
+        "models can be ranked on it with seed-level error bars.",
+        "- **Not claimed:** state-of-the-art RUL/health estimation; the 3-stage binning is a "
+        "classification reframing.",
+        "",
+        "Regenerate: `python -m scripts.real_data_report --raw-dir <CMAPSSData> --mode "
+        f"{meta_run['mode']} --epochs {meta_run['epochs']} --seeds "
+        f"{' '.join(str(s) for s in meta_run['seeds'])}`.",
+    ]
+    out = out_dir / "cmapss_summary.md"
+    out.write_text("\n".join(lines) + "\n")
+    return out
+
+
+def main(argv: list[str] | None = None) -> None:
+    p = argparse.ArgumentParser(description="Run the benchmark slate on real C-MAPSS data.")
+    p.add_argument("--data", default=None, help="processed .npz from scripts.fetch_cmapss")
+    p.add_argument("--raw-dir", default=None, help="raw C-MAPSS folder (build on the fly)")
+    p.add_argument("--config", default="configs/data/cmapss.yaml")
+    p.add_argument("--mode", default="quick_demo")
+    p.add_argument("--models", default=",".join(DEFAULT_MODELS))
+    p.add_argument("--epochs", type=int, default=20)
+    p.add_argument("--seeds", type=int, nargs="+", default=[0])
+    p.add_argument("--device", default=None, help="torch device (cuda/cpu); default auto-detect")
+    p.add_argument("--out", default="reports/experiment_summaries")
+    args = p.parse_args(argv)
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    models = [m.strip() for m in args.models.split(",") if m.strip()]
+
+    X, y, meta = _load_data(args)
+    class_names = meta["event_classes"]
+    print(
+        f"Loaded C-MAPSS: X={X.shape}, {len(class_names)} classes, "
+        f"{len(set(meta['groups']))} engines"
+    )
+
+    full = load_mode_config(args.config, mode=args.mode)
+    arch = full.get("model", {})
+    train_block = full.get("train", {})
+    loop_keys = (
+        "optimizer",
+        "lr",
+        "weight_decay",
+        "label_smoothing",
+        "scheduler",
+        "warmup_epochs",
+        "batch_size",
+        "patience",
+    )
+    # One recipe for BOTH deep models (parity): comparisons measure architecture, not budget.
+    deep_kwargs = {k: train_block[k] for k in loop_keys if k in train_block}
+
+    per_seed = {
+        s: _run_one_seed(s, X, y, meta, models, args, arch, deep_kwargs, out_dir)
+        for s in args.seeds
+    }
+
+    import platform
+
+    import torch
+
+    meta_run = {
+        "mode": args.mode,
+        "subsets": str(load_mode_config(args.config, mode=args.mode).get("data", {}).get("subset")),
+        "seeds": list(args.seeds),
+        "epochs": args.epochs,
+        "raw_sha256": meta.get("raw_sha256", {}),
+        "device": args.device or ("cuda" if torch.cuda.is_available() else "cpu"),
+        "torch": torch.__version__,
+        "platform": platform.platform(),
+    }
+    report = _write_report(per_seed[args.seeds[-1]], out_dir, meta, class_names)
+    summary = _write_summary(per_seed, out_dir, meta_run, class_names)
+    print(f"\nReports written to {report} and {summary}")
 
 
 if __name__ == "__main__":

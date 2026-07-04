@@ -1,10 +1,14 @@
 # NASA C-MAPSS turbofan -> 3-stage health classification (roadmap v0.6, spec §16).
 # Real-data validation config. The raw .txt files are a US-government work (NASA PCoE) and are NOT
 # committed; download them and point --raw-dir at the folder.
-# SHA-256 of the raw train_FD00x.txt files. Empty until first download: scripts/fetch_cmapss.py
-# prints each file's hash — paste them here to lock later runs to the same input bytes.
-# Every processed .npz also carries the hashes in its .meta.json sidecar.
-raw_sha256: {}
+# SHA-256 of the raw train_FD00x.txt files (CMAPSSData.zip via data.nasa.gov, retrieved
+# 2026-07-03). Later runs verify against these; every processed .npz also carries the hashes
+# of its actual inputs in its .meta.json sidecar.
+raw_sha256:
+  train_FD001.txt: 963b5e22825b34d8b21c69e1aeb4af3e647050eb672ee8834ba4b5d91d2de0f8
+  train_FD002.txt: dac6c4dbc4e7c1bdeb5747da3d313d05c395bb99801b44a002b26a2ba13d788f
+  train_FD003.txt: 2abbe9968cc5e8eb091980f51b20f62bb4127336d3482cb52071d53bf23329e2
+  train_FD004.txt: 27ef6160b6a1dcb2613a88de9c239f763b223f02cdc41dc5cdedc5dc189b6218
 
 data:
   subset: FD001            # one subset, or a comma list e.g. "FD001,FD003" (two failure modes)
