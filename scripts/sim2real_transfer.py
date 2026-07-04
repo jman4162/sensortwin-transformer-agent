@@ -116,6 +116,7 @@ def _run_fraction(
     ft_kwargs,
     epochs_ft,
     device=None,
+    channel_names=None,
 ) -> dict[str, float]:
     from sensortwin.models.transformer import SensorPatchTST
     from sensortwin.training.loop import class_weights, predict_proba, train_model
@@ -164,8 +165,10 @@ def _run_fraction(
     )
 
     clf = make_xgboost()
-    clf.fit(build_feature_matrix(X[sub])[0], y[sub])
-    proba = clf.predict_proba(build_feature_matrix(X[te])[0])
+    # channel_names must match the real channel count (C=14) — the default names are the 8
+    # synthetic channels and build_feature_matrix asserts on the width mismatch.
+    clf.fit(build_feature_matrix(X[sub], channels=channel_names)[0], y[sub])
+    proba = clf.predict_proba(build_feature_matrix(X[te], channels=channel_names)[0])
     out["xgboost"] = _macro_f1(y[te], proba.argmax(1), num_classes)
     return out
 
@@ -270,6 +273,7 @@ def _run_one_seed(seed, X, y, meta, fractions, arch, args) -> dict[str, dict[flo
             ft_kwargs,
             args.epochs_finetune,
             args.device,
+            meta.get("channel_names"),
         )
         for a in ARMS:
             curves[a][f] = res[a]
