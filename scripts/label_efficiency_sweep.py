@@ -325,33 +325,71 @@ def main(argv: list[str] | None = None) -> None:
     epochs_ft = (
         args.epochs_finetune if args.epochs_finetune is not None else ft_block.get("epochs", 30)
     )
-    print(f"Pretraining (masked reconstruction) for {epochs_pre} epochs...")
-    pre_ds = SensorArrayDataset(
-        standardizer.transform(X[splits["train"]]), y[splits["train"]]
-    ).as_torch()
-    val_ds = SensorArrayDataset(
-        standardizer.transform(X[splits["val"]]), y[splits["val"]]
-    ).as_torch()
-    pre_kwargs = {k: pre_block[k] for k in _LOOP_KEYS + ("mask_ratio",) if k in pre_block}
-    from sensortwin.training.augment import build_augment
+    # Checkpoints: a Colab disconnect or kill resumes instead of restarting (the 100% fraction
+    # alone is hours of GPU). The pretrained encoder is cached to disk; each (seed, fraction)
+    # cell is cached as JSON. Reused only when the run parameters match.
+    import json as _json
 
-    aug = build_augment(pre_block.get("augment"))
-    pmodel, _, phist = pretrain_model(
-        SensorPatchTST(**model_cfg),
-        pre_ds,
-        val_ds,
-        epochs=epochs_pre,
-        augment=aug,
-        device=args.device,
-        **pre_kwargs,
-    )
-    pretrained_state = copy.deepcopy(pmodel.state_dict())
-    print(f"  pretrain val MSE: {phist.val_loss[0]:.4f} -> {phist.val_loss[-1]:.4f}")
+    import torch
+
+    ckpt_dir = out_dir / "per_seed"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_meta = {
+        "mode": args.mode,
+        "epochs_pretrain": epochs_pre,
+        "epochs_finetune": epochs_ft,
+        "arm_lrs": list(ARM_LRS),
+        "base_seed": args.seed,
+        "fractions": [float(f) for f in fractions],
+    }
+    pt_path = ckpt_dir / "le_pretrained_state.pt"
+    pt_meta_path = ckpt_dir / "le_pretrained_meta.json"
+
+    if (
+        pt_path.exists()
+        and pt_meta_path.exists()
+        and _json.loads(pt_meta_path.read_text()) == ckpt_meta
+    ):
+        print(f"Reusing pretrained encoder checkpoint {pt_path}")
+        pretrained_state = torch.load(pt_path, map_location="cpu", weights_only=True)
+    else:
+        print(f"Pretraining (masked reconstruction) for {epochs_pre} epochs...")
+        pre_ds = SensorArrayDataset(
+            standardizer.transform(X[splits["train"]]), y[splits["train"]]
+        ).as_torch()
+        val_ds = SensorArrayDataset(
+            standardizer.transform(X[splits["val"]]), y[splits["val"]]
+        ).as_torch()
+        pre_kwargs = {k: pre_block[k] for k in _LOOP_KEYS + ("mask_ratio",) if k in pre_block}
+        from sensortwin.training.augment import build_augment
+
+        aug = build_augment(pre_block.get("augment"))
+        pmodel, _, phist = pretrain_model(
+            SensorPatchTST(**model_cfg),
+            pre_ds,
+            val_ds,
+            epochs=epochs_pre,
+            augment=aug,
+            device=args.device,
+            **pre_kwargs,
+        )
+        pretrained_state = copy.deepcopy({k: v.cpu() for k, v in pmodel.state_dict().items()})
+        torch.save(pretrained_state, pt_path)
+        pt_meta_path.write_text(_json.dumps(ckpt_meta, indent=2))
+        print(f"  pretrain val MSE: {phist.val_loss[0]:.4f} -> {phist.val_loss[-1]:.4f}")
 
     # Accumulate macro-F1 per (arm, fraction) over seeds.
     acc: dict[str, dict[float, list[float]]] = {a: {f: [] for f in fractions} for a in ARMS}
     for s in range(args.seeds):
         for f in fractions:
+            cell = ckpt_dir / f"le_seed{args.seed + s}_frac{f:g}.json"
+            if cell.exists():
+                saved = _json.loads(cell.read_text())
+                if saved["meta"] == ckpt_meta:
+                    print(f"--- seed {s} fraction {f * 100:g}% (reusing checkpoint) ---")
+                    for a in ARMS:
+                        acc[a][f].append(saved["res"][a]["macro_f1"])
+                    continue
             print(f"--- seed {s} fraction {f * 100:g}% ---")
             res = _run_fraction(
                 f,
@@ -367,6 +405,7 @@ def main(argv: list[str] | None = None) -> None:
                 epochs_ft,
                 args.device,
             )
+            cell.write_text(_json.dumps({"meta": ckpt_meta, "res": res}, indent=2))
             for a in ARMS:
                 acc[a][f].append(res[a]["macro_f1"])
                 print(f"  {a}: macro-F1={res[a]['macro_f1']:.3f}")
