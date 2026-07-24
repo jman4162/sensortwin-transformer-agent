@@ -261,7 +261,9 @@ Holm-corrected per-class deltas. It writes the committable
 | v0.8 | Fairness overhaul: training parity, hardened generator, paired statistics, 5-seed re-run | **done** |
 | v0.9 | Research-grade robustness (both arms), interpretability, calibration, and agent session at 20k, all with committed artifacts | **done** |
 | v0.10 | Shared tuning grid + tuned-recipe headline check (the +0.09 → +0.03 decomposition) | **done** |
-| next | Matched-budget label-efficiency re-run (Colab notebook 06) — the last open evidence item | open |
+| v0.11 | C-MAPSS on the real download: features win on real data; sim2real transfer null | **done** |
+| v0.12 | Matched-budget label-efficiency verdict (Colab L4, 3 seeds): pretraining null confirmed; features win below 10% labels | **done** |
+| optional | 100k `full_reproduction` tier; FD002/FD004 (condition-aware normalization); second real dataset if a workshop paper is pursued | not scheduled |
 
 ## License
 

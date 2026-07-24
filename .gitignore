@@ -41,7 +41,8 @@ reports/experiment_summaries/**/per_seed/
 reports/experiment_summaries/per_seed/
 # Ablation table needs colab_standard + seed averaging to be meaningful; generate with `make ablate`.
 reports/experiment_summaries/transformer_ablations.md
-# Label-efficiency curve likewise needs colab_standard + seeds; generate with `make label-efficiency`.
+# Label-efficiency verbose per-run report (the *_summary.{json,md} artifacts ARE committed).
+reports/experiment_summaries/**/label_efficiency.md
 reports/experiment_summaries/label_efficiency.md
 # The research-grade *_summary.{json,md} artifacts ARE committed; only the verbose/wiring
 # outputs below stay ignored.

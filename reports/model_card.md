@@ -104,12 +104,13 @@ well-calibrated after a one-parameter fit — **in distribution only**: the same
   remaining reliable advantage is almost entirely `sensor_dropout` (+0.22); the tuned CNN
   recovers most of `correlated_channel_fault`. Quote +0.03, not +0.09, when the question is
   architecture rather than shared-budget behavior.
-- Masked-pretraining **did not improve label efficiency** at `colab_standard` (1 seed, reduced
-  budget): pretrained-then-fine-tuned trailed from-scratch at every label fraction and the frozen
-  linear probe was near-useless. This is confounded by a lower fine-tune learning rate / short
-  schedule that undertrains the pretrained arms, so it is "no help at this budget," not a verdict —
-  a matched-budget, multi-seed re-run is pending. Any gain may also reflect the encoder learning the
-  generator's regularities rather than transferable structure.
+- Masked-pretraining **did not improve label efficiency under matched budgets** (per-arm LR
+  selection, 3 seeds, `label_efficiency_summary.json`): pretrained-vs-scratch is +0.06 at 1%
+  labels (paired p = 0.13), never significant at any fraction, and the frozen linear probe
+  plateaus at 0.25 macro-F1 even with all labels. Below 10% labels XGBoost-on-features and the
+  CNN beat both transformer arms outright. Fourth consistent pretraining null (with the
+  robustness and sim2real studies); use engineered features, not pretraining, when labels are
+  scarce here.
 - Engineered features + gradient boosting are **surprisingly strong** on simple drift/spike events.
 - **Extreme noise breaks the transformer first**: at 10× the training noise floor its macro-F1
   drops by 0.85 — worse than every baseline — despite jitter augmentation. Its shift robustness

@@ -6,6 +6,46 @@ weekend demo into a mini research program.)
 
 ---
 
+## 2026-07-23 — matched-budget label efficiency: the pretraining null is final
+
+**Question.** The last provisional claim in the public docs: does masked-patch pretraining
+improve label efficiency once the fine-tune-LR confound is removed?
+
+**Setup.** Colab L4 (torch 2.11.0+cu128), colab_standard, 3 seeds, pretrain 50 / fine-tune 30
+epochs; both transformer arms select their LR from the same two-point validation budget
+{1e-3, 1e-4}; per-(seed, fraction) resume checkpoints. Run by John via notebook 06 (committed
+with outputs). Artifact: `label_efficiency_summary.{json,md}`.
+
+**Result (test macro-F1, mean ± sample std; paired pretrained_ft − scratch p-values).**
+
+| Fraction | scratch | pretrained_ft | pretrained_probe | cnn | xgboost | Δ(ft−scratch), p |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1% | 0.110 ± 0.009 | 0.171 ± 0.037 | 0.108 ± 0.026 | 0.353 ± 0.027 | 0.458 ± 0.031 | +0.061, p=0.13 |
+| 5% | 0.444 ± 0.103 | 0.507 ± 0.101 | 0.174 ± 0.016 | 0.486 ± 0.017 | 0.573 ± 0.007 | +0.063, p=0.33 |
+| 10% | 0.697 ± 0.034 | 0.686 ± 0.032 | 0.228 ± 0.005 | 0.584 ± 0.008 | 0.614 ± 0.015 | −0.012, p=0.74 |
+| 100% | 0.870 ± 0.006 | 0.866 ± 0.005 | 0.250 ± 0.015 | 0.769 ± 0.009 | 0.708 ± 0.000 | −0.004, p=0.30 |
+
+**Interpretation.** Never significant, at any fraction, under matched budgets — the fourth
+consistent pretraining null (after synthetic robustness, sim2real transfer, and the
+confounded-era sweep). Three secondary reads: (1) the frozen probe plateaus at 0.25 with all
+labels, so the masked-reconstruction objective is not producing linearly separable class
+structure; (2) below 10% labels the classical stack wins outright — xgboost 0.458 and cnn
+0.353 vs ≤ 0.171 for either transformer arm at 1% — so in the scarce-label regime the
+transformer's inductive bias is a liability with or without pretraining; (3) the 100% row
+independently reproduces the v0.8 headline ordering (scratch transformer 0.870 ≈ the 0.861
+MPS run, cnn 0.77, xgboost 0.71) on different hardware.
+
+**1% extension (same day, local MPS, independent pretrain).** The one consistent-sign cell
+re-run at 5 seeds: per-seed differences [+0.072, +0.059, −0.026, +0.009, +0.008] — mixed
+signs, Δ = +0.025, 95% t-interval [−0.026, +0.075], p = 0.25
+(`le_1pct_5seeds/label_efficiency_summary.json`). The n=3 signal regressed toward zero;
+the null stands at every fraction.
+
+**Caveats.** One masking recipe (40%, MSE) and one pretraining corpus size; the null is about
+this configuration, not self-supervision in general.
+
+---
+
 ## 2026-07-04 — C-MAPSS for real: features win on real data, pretraining does not transfer
 
 **Question.** The two v0.6 questions, finally answered on the actual download instead of a

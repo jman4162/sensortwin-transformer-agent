@@ -22,10 +22,11 @@ extreme noise. Attention-pooling weights localize injected events at chance leve
 integrated gradients concentrate ~5× chance mass on them (3 seeds, 300 events). On real data
 (NASA C-MAPSS, grouped-by-engine, 3 seeds) the synthetic ranking does not port:
 XGBoost-on-features leads at 0.899 ± 0.007 vs the transformer's 0.869 ± 0.006. Masked-patch
-self-supervised pretraining bought nothing anywhere it was tested — no label efficiency (at the
-budgets previously tested; a matched-budget re-test is wired), no robustness, and no
-synthetic-to-real transfer (gain over scratch +0.004 to +0.017, p ≥ 0.42). All results
-regenerate from committed configs and one command per table.
+self-supervised pretraining bought nothing anywhere it was tested — no label efficiency
+(matched per-arm LR budgets, 3 seeds: best case +0.06 at 1% labels, paired p = 0.13, nothing at
+5–100%), no robustness, and no synthetic-to-real transfer (gain over scratch +0.004 to +0.017,
+p ≥ 0.42). Below 10% labels, engineered features beat every deep model. All results regenerate
+from committed configs and one command per table.
 
 ## 1. Question and design principles
 
@@ -280,11 +281,19 @@ concrete argument for treating unexecuted evaluation paths as unverified claims.
 
 ## 7. Negative and null results
 
-- **Masked-patch pretraining did not improve label efficiency** at the budgets tested
-  (1/5/10/100% labels, single seed, generator v1). A known confound — the pretrained arms
-  fine-tuned at a lower learning rate for fewer epochs — means the honest verdict is "no help at
-  this budget," not "does not transfer." The sweep now selects each arm's learning rate from the
-  same validation budget, and the matched re-run is queued as follow-up work.
+- **Masked-patch pretraining did not improve label efficiency — matched-budget, final.** With
+  both transformer arms selecting their LR from the same validation budget (3 seeds, pretrain
+  50 / fine-tune 30, Colab L4; artifact: `label_efficiency_summary.json`), the
+  pretrained-vs-scratch delta is +0.06 at 1% labels (paired p = 0.13), +0.06 at 5% (p = 0.33),
+  and ≈ 0 at 10–100%. Never significant. The frozen linear probe plateaus at macro-F1 0.25
+  even with all labels — the pretrained representations are not linearly separable into the
+  classes. Below 10% labels, XGBoost-on-features (0.458 at 1%) and the CNN (0.353) beat both
+  transformer arms outright: in the scarce-label regime the transformer's inductive bias is a
+  liability regardless of pretraining. The one consistent-sign cell (1%) was re-checked at
+  5 seeds with an independent pretrain: the delta shrank to +0.025 [−0.026, +0.075], p = 0.25
+  — regression toward zero, not an emerging effect. This replaces the confounded 2026-06-25
+  run and closes the pretraining question: four independent tests (label efficiency,
+  robustness, sim2real transfer, and the original sweep), one consistent answer.
 - **Attention is not an explanation** here: at trained scale, pooling weights localize events
   at chance level (0.110 ± 0.015 vs random 0.103 ± 0.009) while integrated gradients reach
   0.483 (§5.3).
